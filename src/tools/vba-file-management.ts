@@ -467,27 +467,48 @@ Sub PDMOperation_${args.operation}()
         End If
     End If` : ''}
     
+    ${args.operation === 'add_file' ? `
+    ' Add file to vault
+    Dim destFolder As String
+    destFolder = Left("${args.filePath}", InStrRev("${args.filePath}", "\\"))
+    Set pdmFolder = pdmVault.GetFolderFromPath(destFolder)
+
+    If pdmFolder Is Nothing Then
+        ' Create folder if it does not exist
+        Dim rootFolder As Object
+        Set rootFolder = pdmVault.RootFolder
+        Set pdmFolder = rootFolder.CreateFolderPath(destFolder, 0)
+    End If
+
+    If Not pdmFolder Is Nothing Then
+        pdmFolder.AddFile 0, "${args.filePath}", _
+            "${args.comment || 'Added via VBA'}", 0
+        MsgBox "File added to vault: ${args.filePath}"
+    Else
+        MsgBox "Could not access or create vault folder"
+    End If` : ''}
+
     ${args.operation === 'search' ? `
     ' Search vault
     Set pdmSearch = pdmVault.CreateSearch
-    
+
     ' Set search criteria
     ${args.searchCriteria ? Object.entries(args.searchCriteria).map(([key, value]) => `
     pdmSearch.SetToken EdmSearchToken_e.${key}, "${value}"`).join('\n    ') : ''}
-    
+
     ' Execute search
     Set pdmSearchResult = pdmSearch.GetFirstResult
-    
+
     Dim results As String
     results = "Search Results:" & vbCrLf
-    
+
     While Not pdmSearchResult Is Nothing
         results = results & pdmSearchResult.Path & vbCrLf
         Set pdmSearchResult = pdmSearch.GetNextResult
     Wend
-    
+
     MsgBox results` : ''}
-    
+
     ' Logout
     pdmVault.Logout
 End Sub

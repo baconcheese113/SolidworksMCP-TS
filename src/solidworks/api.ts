@@ -1,7 +1,14 @@
-// @ts-ignore
-import winax from 'winax';
 import { SolidWorksModel, SolidWorksFeature } from './types.js';
 import { logger } from '../utils/logger.js';
+
+// Conditionally load winax (Windows-only COM bridge)
+let winax: any = null;
+try {
+  // @ts-ignore
+  winax = (await import('winax')).default;
+} catch {
+  logger.warn('winax not available - SolidWorks COM operations will not work (expected on non-Windows platforms)');
+}
 
 export class SolidWorksAPI {
   private swApp: any;

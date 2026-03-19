@@ -53,6 +53,7 @@ import { analysisTools } from './tools/analysis.js';
 import { sketchTools } from './tools/sketch.js';
 import { templateManagerTools } from './tools/template-manager.js';
 import { nativeMacroTools } from './tools/native-macro.js';
+import { mcmasterTools } from './tools/mcmaster.js';
 
 // Import API
 import { SolidWorksAPI } from './solidworks/api.js';
@@ -183,6 +184,7 @@ class SolidWorksMCPServer {
       ...analysisTools,
       ...templateManagerTools,
       ...nativeMacroTools,
+      ...mcmasterTools,
       // Add macro tools
       {
         name: 'macro_start_recording',
@@ -313,11 +315,12 @@ class SolidWorksMCPServer {
           }
         }
         
-        // Ensure SolidWorks connection
-        if (!this.api.isConnected()) {
+        // Ensure SolidWorks connection (skip for tools that don't need it)
+        const noSwRequired = name.startsWith('mcmaster_') || name.startsWith('macro_start') || name.startsWith('macro_stop') || name.startsWith('macro_export');
+        if (!noSwRequired && !this.api.isConnected()) {
           await this.api.connect();
         }
-        
+
         // Execute tool
         const result = await tool.handler(validatedArgs, this.api);
         
