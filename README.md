@@ -1,366 +1,308 @@
-# SolidWorks MCP Server - Intelligent COM Bridge with Dynamic Fallback
+# SolidWorks MCP Server
 
 <div align="center">
 
-[![npm version](https://badge.fury.io/js/solidworks-mcp-server.svg)](https://www.npmjs.com/package/solidworks-mcp-server)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![MCP Compatible](https://img.shields.io/badge/MCP-Compatible-green?logo=anthropic)](https://modelcontextprotocol.io)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green?logo=node.js)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Windows](https://img.shields.io/badge/Windows-10%2F11-blue?logo=windows)](https://www.microsoft.com/windows)
 [![SolidWorks](https://img.shields.io/badge/SolidWorks-2021--2025-red)](https://www.solidworks.com/)
 
-**The Most Intelligent Node.js-based SolidWorks Automation Solution**
-
-🚀 **88 Working Tools** | 🧠 **Intelligent COM Bridge** | ⚡ **Dynamic Fallback** | 🎯 **100% Feature Coverage**
+An MCP server that lets AI assistants (Claude, etc.) drive SolidWorks through its COM API.
+90+ tools for modeling, sketching, drawing, export, analysis, VBA generation, and McMaster-Carr part sourcing.
 
 </div>
 
-## 🔥 Breaking the COM Barrier
+## How It Works
 
-**Problem Solved:** Node.js COM bridges fail when calling SolidWorks methods with 13+ parameters. This affects critical features like extrusions, sweeps, and lofts.
-
-**Our Solution:** Intelligent adapter architecture that automatically routes operations:
-- **Simple operations (≤12 params)** → Direct COM (fast)
-- **Complex operations (13+ params)** → Dynamic VBA macro generation (reliable)
-- **Failed operations** → Automatic fallback with circuit breaker pattern
-
-```javascript
-// This now works seamlessly!
-await createExtrusion({
-  depth: 50,
-  bothDirections: true,
-  depth2: 30,
-  draft: 5,
-  thinFeature: true,
-  thinThickness: 2,
-  capEnds: true,
-  capThickness: 1.5
-  // 20+ parameters handled automatically!
-});
+```
+Claude / MCP Client
+       |
+   MCP Protocol (stdio JSON-RPC)
+       |
+   Tool Handlers (src/tools/*.ts)
+       |
+   SolidWorksAPI (src/solidworks/api.ts)  -- winax COM bridge
+       |
+   SolidWorks COM API
 ```
 
-## 🎯 Quick Start
+The server registers tools over MCP's stdio transport. When a tool is called, it validates input with Zod, then calls SolidWorks through the [winax](https://github.com/niclasku/winax) COM bridge. VBA generation tools produce macro code without needing a live SolidWorks connection. McMaster-Carr tools work over HTTP on any platform.
 
-### Prerequisites
-- Windows 10/11
-- SolidWorks 2021-2025 (licensed)
-- Node.js 20+
-- Claude Desktop or any MCP-compatible client
+## Prerequisites
 
-### Installation
+- **Windows 10/11** (required for SolidWorks COM)
+- **SolidWorks 2021-2025** (licensed, running)
+- **Node.js 20+**
+- **Python 3.10+** and **Visual Studio Build Tools** (needed to compile the `winax` native module)
+- **Claude Desktop** or any MCP-compatible client
 
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/SolidworksMCP-Final
-cd SolidworksMCP-Final
+## Windows Setup (from scratch)
 
-# Install dependencies (compiles winax for your system)
-npm install
+If you're starting from a fresh Windows machine, here's everything you need. Open **PowerShell as Administrator**:
 
-# Build TypeScript
-npm run build
+### 1. Install prerequisites with winget
+
+```powershell
+# Volta (Node.js version manager - auto-switches node version per project)
+winget install Volta.Volta
+
+# Python (needed for node-gyp to compile winax)
+winget install Python.Python.3.12
+
+# Visual Studio Build Tools (C++ compiler for native modules)
+winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+
+# Git
+winget install Git.Git
 ```
 
-### Configure Claude Desktop
+Close and reopen PowerShell after installing these so PATH updates take effect.
 
-Add to your `claude_desktop_config.json`:
+### 2. Install Node.js via Volta
+
+```powershell
+# Volta automatically installs and uses the right Node version per project
+volta install node@20
+```
+
+### 3. Clone and build
+
+```powershell
+git clone https://github.com/vespo92/SolidworksMCP-TS.git
+cd SolidworksMCP-TS
+
+# Volta pins Node 20 for this repo automatically (see package.json "volta" field)
+npm install    # compiles winax native module
+npm run build  # TypeScript -> dist/
+```
+
+> **Troubleshooting `npm install` failures:** If winax fails to compile, make sure you have the Visual Studio Build Tools with the C++ workload installed and that `python` is on your PATH. You can verify with `python --version` and `cl` (should print the MSVC compiler version). If needed: `npm config set msvs_version 2022`.
+
+### 4. Configure Claude Desktop
+
+Add to your `claude_desktop_config.json` (usually at `%APPDATA%\Claude\claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
     "solidworks": {
       "command": "node",
-      "args": ["C:/path/to/SolidworksMCP-Final/dist/index.js"],
-      "env": {
-        "SOLIDWORKS_PATH": "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS",
-        "ADAPTER_TYPE": "winax-enhanced"
-      }
+      "args": ["C:/path/to/SolidworksMCP-TS/dist/index.js"]
     }
   }
 }
 ```
 
-## 🏗️ Intelligent Adapter Architecture
+Start SolidWorks, then restart Claude Desktop. The tools should appear in Claude's tool list.
 
-```
-┌─────────────────────────────────────────┐
-│         MCP Protocol Layer              │
-├─────────────────────────────────────────┤
-│    Feature Complexity Analyzer          │ ← Intelligent Routing
-├─────────────────────────────────────────┤
-│      Adapter Abstraction Layer          │
-├─────────────┬───────────────┬───────────┤
-│  WinAx       │   Edge.js     │  PowerShell│
-│  Adapter     │   Adapter     │   Bridge   │
-├──────────────┴───────────────┴───────────┤
-│       Dynamic VBA Macro Generator        │ ← Fallback System
-├─────────────────────────────────────────┤
-│         SolidWorks COM API              │
-└─────────────────────────────────────────┘
-```
+## Tools
 
-### How It Works
+### Modeling (7 tools)
 
-1. **Analyze** - Feature Complexity Analyzer examines parameter count
-2. **Route** - Intelligent routing to fastest viable path
-3. **Execute** - With automatic fallback on failure
-4. **Track** - Performance metrics and success rates
+| Tool | Description |
+|------|-------------|
+| `open_model` | Open a SolidWorks part, assembly, or drawing file |
+| `create_part` | Create a new SolidWorks part document |
+| `close_model` | Close the current model with option to save |
+| `create_extrusion` | Create an extrusion feature |
+| `get_dimension` | Get the value of a dimension |
+| `set_dimension` | Set the value of a dimension |
+| `rebuild_model` | Rebuild the current model |
 
-## 🚀 Features & Capabilities
+### Sketching (17 tools)
 
-### 🎨 Modeling Tools (21 Tools)
-- ✅ **create_part** - Create new part documents
-- ✅ **create_assembly** - Create assembly documents
-- ✅ **create_drawing** - Create drawing documents
-- ✅ **create_extrusion** - Full parameter support with intelligent fallback
-- ✅ **create_extrusion_advanced** - All 20+ parameters supported
-- ✅ **create_revolve** - Smart routing for simple/complex revolves
-- ✅ **create_sweep** - Always uses macro (14+ parameters)
-- ✅ **create_loft** - Dynamic routing based on guides
-- ✅ **create_pattern** - Linear and circular patterns
-- ✅ **create_fillet** - Edge fillets with variable radius
-- ✅ **create_chamfer** - Edge chamfers
-- ✅ **create_configuration** - Configuration management
-- ✅ **get_dimension** - Read dimension values
-- ✅ **set_dimension** - Modify dimensions
-- ✅ **rebuild_model** - Force rebuild
-- And more...
+| Tool | Description |
+|------|-------------|
+| `create_sketch` | Create a new sketch on a specified plane or face |
+| `edit_sketch` | Enter sketch edit mode for an existing sketch |
+| `exit_sketch` | Exit sketch edit mode and rebuild |
+| `sketch_line` | Draw a line in the active sketch |
+| `sketch_centerline` | Draw a centerline in the active sketch |
+| `sketch_circle` | Draw a circle in the active sketch |
+| `sketch_arc` | Draw an arc in the active sketch |
+| `sketch_rectangle` | Draw a rectangle in the active sketch |
+| `sketch_polygon` | Draw a regular polygon in the active sketch |
+| `sketch_spline` | Draw a spline through points in the active sketch |
+| `sketch_ellipse` | Draw an ellipse in the active sketch |
+| `add_sketch_constraint` | Add constraints between sketch entities |
+| `add_sketch_dimension` | Add dimensions to sketch entities |
+| `sketch_linear_pattern` | Create a linear pattern of sketch entities |
+| `sketch_circular_pattern` | Create a circular pattern of sketch entities |
+| `sketch_mirror` | Mirror sketch entities about a line |
+| `sketch_offset` | Create offset curves from sketch entities |
 
-### 📐 Sketch Tools (7 Tools)
-- ✅ **create_sketch** - Create sketches on any plane
-- ✅ **add_line** - Add lines to sketches
-- ✅ **add_circle** - Add circles
-- ✅ **add_rectangle** - Add rectangles
-- ✅ **add_arc** - Add arcs
-- ✅ **add_constraints** - Apply sketch constraints
-- ✅ **dimension_sketch** - Add dimensions
+### Drawing (5 tools)
 
-### 📊 Analysis Tools (6 Tools)
-- ✅ **get_mass_properties** - Mass, volume, center of mass
-- ✅ **check_interference** - Assembly interference detection
-- ✅ **measure_distance** - Measure between entities
-- ✅ **analyze_draft** - Draft angle analysis
-- ✅ **check_geometry** - Geometry validation
-- ✅ **get_bounding_box** - Get model bounds
+| Tool | Description |
+|------|-------------|
+| `create_drawing_from_model` | Create a new drawing from the current 3D model |
+| `add_drawing_view` | Add a view to the current drawing |
+| `add_section_view` | Add a section view to the drawing |
+| `add_dimensions` | Add dimensions to a drawing view |
+| `update_sheet_format` | Update drawing sheet format and properties |
 
-### 📁 Export Tools (4 Tools)
-- ✅ **export_file** - Export to STEP, IGES, STL, PDF, DWG, DXF
-- ✅ **batch_export** - Export multiple configurations
-- ✅ **export_with_options** - Advanced export settings
-- ✅ **capture_screenshot** - Capture model views
+### Export (4 tools)
 
-### 📝 Drawing Tools (10 Tools)
-- ✅ **create_drawing_from_model** - Generate drawings
-- ✅ **add_drawing_view** - Add model views
-- ✅ **add_section_view** - Create section views
-- ✅ **add_dimensions** - Auto-dimension views
-- ✅ **update_sheet_format** - Modify sheet formats
-- And more...
+| Tool | Description |
+|------|-------------|
+| `export_file` | Export the current model to STEP, IGES, STL, PDF, DWG, DXF |
+| `batch_export` | Export multiple configurations or files to a format |
+| `export_with_options` | Export with specific format options |
+| `capture_screenshot` | Capture a screenshot of the current model view |
 
-### 🔧 VBA Generation (15 Tools)
-- ✅ **generate_vba_script** - Generate from templates
-- ✅ **create_feature_vba** - Feature creation scripts
-- ✅ **create_batch_vba** - Batch processing scripts
-- ✅ **vba_advanced_features** - Complex feature scripts
-- ✅ **vba_pattern_features** - Pattern generation
-- ✅ **vba_sheet_metal** - Sheet metal operations
-- ✅ **vba_configurations** - Configuration scripts
-- ✅ **vba_equations** - Equation-driven designs
-- ✅ **vba_simulation_setup** - Simulation preparation
-- And more...
+### Analysis (6 tools)
 
-### 🎯 Testing & Diagnostics (6 Tools)
-- ✅ **test_all_features** - Comprehensive feature testing
-- ✅ **test_feature_complexity** - Analyze routing decisions
-- ✅ **test_extrusion_all_parameters** - Test all extrusion variants
-- ✅ **benchmark_feature_creation** - Performance comparison
-- ✅ **test_adapter_metrics** - Health monitoring
-- ✅ **diagnose_macro_execution** - Troubleshooting
+| Tool | Description |
+|------|-------------|
+| `get_mass_properties` | Get mass properties of the current model |
+| `check_interference` | Check for interference between components in an assembly |
+| `measure_distance` | Measure distance between two selected entities |
+| `analyze_draft` | Analyze draft angles for molding |
+| `check_geometry` | Check model geometry for errors |
+| `get_bounding_box` | Get the bounding box dimensions of the model |
 
-## 💡 Usage Examples
+### VBA Generation (28 tools)
 
-### Simple Operations (Direct COM - Fast)
-```javascript
-// Simple extrusion - uses direct COM
-await solidworks.create_extrusion({
-  depth: 50
-});
+These tools generate ready-to-run VBA macro code. They don't require a live SolidWorks connection.
 
-// Simple revolve - uses direct COM  
-await solidworks.create_revolve({
-  angle: 270
-});
-```
+| Tool | Description |
+|------|-------------|
+| `generate_vba_script` | Generate a VBA script from a template with parameters |
+| `create_feature_vba` | Generate VBA code to create a specific feature |
+| `create_batch_vba` | Generate VBA for batch processing multiple files |
+| `run_vba_macro` | Execute a VBA macro in SolidWorks |
+| `create_drawing_vba` | Generate VBA to create drawings from 3D models |
+| `vba_create_reference_geometry` | Generate VBA for reference geometry (planes, axes, points) |
+| `vba_advanced_features` | Generate VBA for advanced features (sweep, loft, boundary) |
+| `vba_pattern_features` | Generate VBA for pattern features |
+| `vba_sheet_metal` | Generate VBA for sheet metal operations |
+| `vba_surface_modeling` | Generate VBA for surface modeling operations |
+| `vba_assembly_mates` | Generate VBA for creating assembly mates |
+| `vba_assembly_components` | Generate VBA for inserting and managing components |
+| `vba_assembly_analysis` | Generate VBA for assembly analysis |
+| `vba_assembly_configurations` | Generate VBA for managing assembly configurations |
+| `vba_create_drawing_views` | Generate VBA for creating drawing views |
+| `vba_drawing_dimensions` | Generate VBA for adding dimensions to drawings |
+| `vba_drawing_annotations` | Generate VBA for adding annotations to drawings |
+| `vba_drawing_tables` | Generate VBA for creating tables in drawings |
+| `vba_drawing_sheet_format` | Generate VBA for managing drawing sheets and formats |
+| `vba_batch_operations` | Generate VBA for batch file operations |
+| `vba_custom_properties` | Generate VBA for managing custom properties |
+| `vba_pdm_operations` | Generate VBA for PDM vault operations (check in/out, add file, search) |
+| `vba_design_table` | Generate VBA for creating and managing design tables |
+| `vba_configurations` | Generate VBA for managing configurations |
+| `vba_equations` | Generate VBA for managing equations and global variables |
+| `vba_simulation_setup` | Generate VBA for setting up simulation studies |
+| `vba_api_automation` | Generate VBA for advanced API automation and event handling |
+| `vba_error_handling` | Generate VBA with comprehensive error handling and logging |
 
-### Complex Operations (Automatic Macro Fallback)
-```javascript
-// Complex extrusion - automatically uses macro
-await solidworks.create_extrusion_advanced({
-  depth: 50,
-  bothDirections: true,
-  depth2: 30,
-  draft: 5,
-  draftOutward: true,
-  thinFeature: true,
-  thinThickness: 2,
-  thinType: "TwoSide",
-  capEnds: true,
-  capThickness: 1.5
-});
+### Template Management (6 tools)
 
-// Thin revolve - automatically uses macro
-await solidworks.create_revolve({
-  angle: 180,
-  thinFeature: true,
-  thinThickness: 2
-});
-```
+| Tool | Description |
+|------|-------------|
+| `extract_drawing_template` | Extract complete template settings from a parent drawing file |
+| `apply_drawing_template` | Apply template settings to a target drawing file |
+| `batch_apply_template` | Apply template to multiple child drawing files |
+| `compare_drawing_templates` | Compare template settings between two drawings |
+| `save_template_to_library` | Save a drawing template to a reusable library |
+| `list_template_library` | List all templates in the library |
 
-### Feature Testing
-```javascript
-// Test all features with complexity analysis
-await solidworks.test_all_features({
-  testExtrusion: true,
-  testRevolve: true,
-  testSweep: true,
-  testLoft: true
-});
+### Macro Recording (8 tools)
 
-// Benchmark performance
-await solidworks.benchmark_feature_creation({
-  iterations: 10,
-  featureType: "extrusion"
-});
-```
+| Tool | Description |
+|------|-------------|
+| `start_native_macro_recording` | Start recording a macro using SolidWorks native VBA recorder |
+| `stop_native_macro_recording` | Stop the current native macro recording and save |
+| `pause_resume_macro_recording` | Pause or resume the current macro recording |
+| `run_macro` | Run a SolidWorks macro file |
+| `edit_macro` | Open a macro in the SolidWorks VBA editor |
+| `create_initialized_macro` | Create a new macro with proper SolidWorks VBA initialization |
+| `convert_text_to_native_macro` | Convert plain text VBA code to a properly initialized SolidWorks macro |
+| `batch_run_macros` | Run multiple macros in sequence |
 
-## 📊 Performance Metrics
+### McMaster-Carr (5 tools)
 
-| Operation Type | Method | Average Time | Success Rate |
-|---------------|--------|--------------|--------------|
-| Simple Extrusion | Direct COM | ~50ms | 99.9% |
-| Complex Extrusion | Macro Fallback | ~200ms | 100% |
-| Simple Revolve | Direct COM | ~45ms | 99.9% |
-| Complex Revolve | Macro Fallback | ~180ms | 100% |
-| Sweep | Always Macro | ~250ms | 100% |
-| Loft | Dynamic | ~150-300ms | 100% |
+Search McMaster-Carr, get full part details (specs, pricing, delivery), download CAD files, and add parts to your PDM vault with metadata. Works on any platform — no SolidWorks connection needed.
 
-## 🔬 Feature Complexity Analysis
+| Tool | Auth | Description |
+|------|:---:|---|
+| `mcmaster_search` | No | Search catalog by keyword or category |
+| `mcmaster_part_details` | No (basic) | Pricing and delivery. With browser cookies: full specs table, images, CAD paths |
+| `mcmaster_set_cookies` | - | Provide browser cookies for authenticated endpoints (`cat` cookie required) |
+| `mcmaster_download_cad` | Yes | Download STEP, SLDPRT, IGES, DWG, etc. to a local path |
+| `mcmaster_add_to_pdm` | Yes | Download CAD + stamp metadata as custom properties + generate PDM add VBA |
 
-The system automatically analyzes every feature creation:
+## Development
 
-```javascript
-// Get complexity analysis for any operation
-await solidworks.test_feature_complexity({
-  featureType: "extrusion",
-  parameters: {
-    depth: 50,
-    thinFeature: true,
-    capEnds: true
-  }
-});
-
-// Returns:
-{
-  analysis: {
-    requiresMacro: true,
-    complexity: "complex",
-    parameterCount: 16,
-    reason: "Parameter count (16) exceeds COM limit (12)"
-  },
-  recommendation: {
-    approach: "macro",
-    reason: "Parameters exceed COM limit, macro fallback required"
-  }
-}
-```
-
-## 🛡️ Reliability Features
-
-### Circuit Breaker Pattern
-Prevents cascading failures when operations fail repeatedly:
-- Monitors failure rates
-- Opens circuit after threshold
-- Auto-recovery with half-open state
-
-### Connection Pooling
-Manages multiple SolidWorks connections efficiently:
-- Concurrent operation support
-- Resource management
-- Automatic cleanup
-
-### Intelligent Fallback
-Every operation has a fallback strategy:
-- Primary: Direct COM call
-- Fallback: VBA macro generation
-- Emergency: Error recovery with suggestions
-
-## 🤝 Contributing
-
-We welcome contributions! Key areas:
-- Additional feature implementations
-- Performance optimizations
-- Edge.js adapter completion (.NET runtime)
-- PowerShell bridge implementation
-- Additional CAD format support
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## 📈 Roadmap
-
-- [x] Intelligent adapter architecture
-- [x] Feature complexity analyzer
-- [x] Dynamic VBA macro generation
-- [x] Circuit breaker pattern
-- [x] Connection pooling
-- [ ] Edge.js adapter (pending .NET setup)
-- [ ] PowerShell bridge
-- [ ] Cloud deployment support
-- [ ] Real-time collaboration
-- [ ] AI-powered design suggestions
-
-## 🐛 Troubleshooting
-
-### COM Registration Issues
-```powershell
-# Re-register SolidWorks COM
-regsvr32 "C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\sldworks.tlb"
-```
-
-### Build Issues
 ```bash
-# Clean rebuild
-rm -rf node_modules dist
-npm install
-npm run build
+npm run build        # TypeScript compile
+npm run dev          # Hot-reload dev server (tsx watch)
+npm test             # Unit tests (vitest)
+npm run test:watch   # Watch mode
+npm run lint         # ESLint
+npm run typecheck    # Type check without emit
 ```
 
-### Enable Debug Logging
-```javascript
-// Set in environment
-ENABLE_LOGGING=true
-LOG_LEVEL=debug
+### Testing
+
+Tests use mocks by default so they run on any platform (including CI on Mac/Linux):
+
+```bash
+npm test                                    # All tests (mocked, no network)
+MCMASTER_NETWORK_TESTS=true npm test        # Include McMaster live endpoint tests
+USE_MOCK_SOLIDWORKS=false npm test          # Integration tests (Windows + SolidWorks required)
 ```
 
-## 📄 License
+### Project Structure
 
-MIT License - See [LICENSE](LICENSE) file
+```
+src/
+  index.ts                  # MCP server entry point, tool registration
+  solidworks/
+    api.ts                  # Direct COM interface via winax
+  tools/
+    modeling.ts             # Part/assembly/feature tools
+    sketch.ts              # Sketch creation and entities
+    drawing.ts             # Drawing generation
+    export.ts              # File export
+    analysis.ts            # Mass properties, interference, etc.
+    vba.ts                 # VBA code generation (+ vba-*.ts)
+    template-manager.ts    # Feature templates
+    native-macro.ts        # Macro recording/playback
+    mcmaster.ts            # McMaster-Carr integration
+  adapters/                # Adapter layer (not currently wired into the server)
+  resources/               # MCP resource definitions (design tables, PDM config)
+  utils/                   # Logging (winston), environment config
+```
 
-## 🙏 Acknowledgments
+### Key Conventions
 
-- SolidWorks API Team for comprehensive documentation
-- winax contributors for COM bridge
-- Anthropic for MCP protocol specification
-- Community contributors and testers
+- **ESM modules** (`"type": "module"` in package.json)
+- **Never pass `null` to COM** — use `undefined` for optional parameters (COM interprets `null` as VT_NULL causing type mismatch)
+- **Winston logging only** — never `console.*` (breaks JSON-RPC stdio transport)
+- **Zod schemas** for all tool input validation
 
-## 📞 Support
+## Troubleshooting
 
-- **Issues**: [GitHub Issues](https://github.com/vespo92/SolidworksMCP/issues)
+### winax won't compile
+Make sure Visual Studio Build Tools (C++ workload) and Python are installed. Then:
+```powershell
+npm config set msvs_version 2022
+npm install --build-from-source
+```
 
----
+### SolidWorks connection fails
+- SolidWorks must be running before starting the MCP server
+- Check that SolidWorks COM is registered: `regsvr32 "C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\sldworks.tlb"`
+- Try running your terminal as Administrator
 
-<div align="center">
-Built with ❤️ for the CAD automation community
+### Debug logging
+```powershell
+$env:LOG_LEVEL="debug"
+node dist/index.js
+```
 
-**Making SolidWorks automation accessible to everyone**
-</div>
+## License
+
+MIT
