@@ -79,7 +79,24 @@ npm run build  # TypeScript -> dist/
 
 > **Troubleshooting `npm install` failures:** If winax fails to compile, make sure you have the Visual Studio Build Tools with the C++ workload installed and that `python` is on your PATH. You can verify with `python --version` and `cl` (should print the MSVC compiler version). If needed: `npm config set msvs_version 2022`.
 
-### 4. Configure Claude Desktop
+### 4. Connect to an AI assistant
+
+#### Claude Code (automatic)
+
+If you cloned the repo, Claude Code auto-detects the `.mcp.json` and offers to enable the server. Just open the project:
+
+```powershell
+cd SolidworksMCP-TS
+claude
+```
+
+Or add it manually from anywhere:
+
+```powershell
+claude mcp add --transport stdio solidworks -- node C:/path/to/SolidworksMCP-TS/dist/index.js
+```
+
+#### Claude Desktop
 
 Add to your `claude_desktop_config.json` (usually at `%APPDATA%\Claude\claude_desktop_config.json`):
 
@@ -94,7 +111,7 @@ Add to your `claude_desktop_config.json` (usually at `%APPDATA%\Claude\claude_de
 }
 ```
 
-Start SolidWorks, then restart Claude Desktop. The tools should appear in Claude's tool list.
+Restart Claude Desktop after saving. Start SolidWorks before using any modeling/sketch/analysis tools (VBA generation and McMaster-Carr tools work without SolidWorks running).
 
 ## Tools
 
