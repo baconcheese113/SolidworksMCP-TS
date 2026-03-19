@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SolidWorksAPI } from '../solidworks/api.js';
+import { autoExecuteField, withAutoExecute } from '../utils/vba-auto-execute.js';
 
 /**
  * VBA Generation for Advanced SolidWorks Features
@@ -17,9 +18,10 @@ export const advancedVBATools = [
       features: z.array(z.string()).optional(),
       properties: z.record(z.any()).optional(),
       suppressStates: z.record(z.boolean()).optional(),
-      displayStates: z.array(z.string()).optional()
+      displayStates: z.array(z.string()).optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       return `
 Sub ManageConfiguration_${args.operation}()
     Dim swApp As SldWorks.SldWorks
@@ -112,7 +114,7 @@ Sub ManageConfiguration_${args.operation}()
     
     swModel.EditRebuild3
 End Sub`;
-    }
+    })
   },
 
   {
@@ -127,9 +129,10 @@ End Sub`;
         comment: z.string().optional()
       })).optional(),
       externalFile: z.string().optional(),
-      linkExternal: z.boolean().optional()
+      linkExternal: z.boolean().optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       return `
 Sub ManageEquations_${args.operation}()
     Dim swApp As SldWorks.SldWorks
@@ -234,7 +237,7 @@ Sub ManageEquations_${args.operation}()
     
     swModel.EditRebuild3
 End Sub`;
-    }
+    })
   },
 
   {
@@ -257,9 +260,10 @@ End Sub`;
         value: z.number(),
         unit: z.string()
       })).optional(),
-      meshQuality: z.enum(['draft', 'standard', 'fine']).optional()
+      meshQuality: z.enum(['draft', 'standard', 'fine']).optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       return `
 Sub SetupSimulationStudy_${args.studyType}()
     Dim swApp As SldWorks.SldWorks
@@ -365,7 +369,7 @@ Sub SetupSimulationStudy_${args.studyType}()
     
     MsgBox "Simulation study '${args.studyName}' created and configured"
 End Sub`;
-    }
+    })
   },
 
   {
@@ -382,9 +386,10 @@ End Sub`;
         name: z.string(),
         parameters: z.array(z.string()).optional(),
         returnType: z.string().optional()
-      })).optional()
+      })).optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       const eventHandlers: Record<string, string> = {
         file_save: `
 Private Function swApp_FileSaveNotify(ByVal FileName As String) As Long
@@ -626,7 +631,7 @@ End Sub
 Public Sub OnCommand1()
     MsgBox "Custom command executed"
 End Sub` : ''}`;
-    }
+    })
   },
 
   {
@@ -638,9 +643,10 @@ End Sub` : ''}`;
       logToFile: z.boolean().optional(),
       logPath: z.string().optional(),
       emailOnError: z.boolean().optional(),
-      emailAddress: z.string().optional()
+      emailAddress: z.string().optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       return `
 ' Error handling and logging utilities
 Option Explicit
@@ -789,6 +795,6 @@ Private Function GetMemoryUsage() As Long
     On Error Resume Next
     GetMemoryUsage = Application.MemoryUsed * 1024
 End Function`;
-    }
+    })
   }
 ];

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SolidWorksAPI } from '../solidworks/api.js';
+import { autoExecuteField, withAutoExecute } from '../utils/vba-auto-execute.js';
 
 /**
  * VBA Generation for Part Modeling Operations
@@ -16,9 +17,10 @@ export const partModelingVBATools = [
       references: z.array(z.string()).describe('Names of reference entities'),
       offset: z.number().optional().describe('Offset distance in mm'),
       angle: z.number().optional().describe('Angle in degrees'),
-      flipDirection: z.boolean().optional()
+      flipDirection: z.boolean().optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any, swApi: SolidWorksAPI) => {
+    handler: withAutoExecute((args: any, swApi: SolidWorksAPI) => {
       const templates: Record<string, string> = {
         plane: `
 Sub CreateReferencePlane()
@@ -119,7 +121,7 @@ End Sub`
       };
       
       return templates[args.geometryType] || 'Geometry type not supported';
-    }
+    })
   },
 
   {
@@ -132,9 +134,10 @@ End Sub`
       path: z.string().optional().describe('Path for sweep'),
       twistAngle: z.number().optional(),
       thinFeature: z.boolean().optional(),
-      thickness: z.number().optional().describe('Thickness in mm for thin features')
+      thickness: z.number().optional().describe('Thickness in mm for thin features'),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       const templates: Record<string, string> = {
         sweep: `
 Sub CreateSweepFeature()
@@ -255,7 +258,7 @@ End Sub`
       };
       
       return templates[args.featureType] || 'Feature type not supported';
-    }
+    })
   },
 
   {
@@ -276,9 +279,10 @@ End Sub`
       }).optional(),
       axis: z.string().optional().describe('Axis for circular pattern'),
       angle: z.number().optional().describe('Total angle for circular pattern'),
-      seedPoint: z.array(z.number()).optional().describe('[x, y, z] for fill pattern')
+      seedPoint: z.array(z.number()).optional().describe('[x, y, z] for fill pattern'),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       const templates: Record<string, string> = {
         linear: `
 Sub CreateLinearPattern()
@@ -381,7 +385,7 @@ End Sub`
       };
       
       return templates[args.patternType] || 'Pattern type not supported';
-    }
+    })
   },
 
   {
@@ -394,9 +398,10 @@ End Sub`
       bendAngle: z.number().optional().describe('Bend angle in degrees'),
       kFactor: z.number().optional().default(0.5),
       reliefType: z.enum(['rectangular', 'obround', 'tear']).optional(),
-      reliefRatio: z.number().optional().default(0.5)
+      reliefRatio: z.number().optional().default(0.5),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       return `
 Sub CreateSheetMetalFeature_${args.operation}()
     Dim swApp As SldWorks.SldWorks
@@ -453,7 +458,7 @@ Sub CreateSheetMetalFeature_${args.operation}()
         MsgBox "Failed to create sheet metal feature"
     End If
 End Sub`;
-    }
+    })
   },
 
   {
@@ -465,9 +470,10 @@ End Sub`;
       distance: z.number().optional().describe('Distance in mm'),
       angle: z.number().optional().describe('Angle in degrees'),
       offsetDistance: z.number().optional().describe('Offset distance in mm'),
-      thickenDepth: z.number().optional().describe('Thicken depth in mm')
+      thickenDepth: z.number().optional().describe('Thicken depth in mm'),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       return `
 Sub CreateSurfaceFeature_${args.surfaceType}()
     Dim swApp As SldWorks.SldWorks
@@ -520,6 +526,6 @@ Sub CreateSurfaceFeature_${args.surfaceType}()
         MsgBox "Surface created: " & swFeature.Name
     End If
 End Sub`;
-    }
+    })
   }
 ];

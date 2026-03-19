@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SolidWorksAPI } from '../solidworks/api.js';
+import { autoExecuteField, withAutoExecute } from '../utils/vba-auto-execute.js';
 
 /**
  * VBA Generation for Drawing Automation
@@ -35,9 +36,10 @@ export const drawingVBATools = [
         centerX: z.number(),
         centerY: z.number(),
         radius: z.number()
-      }).optional()
+      }).optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       const viewOrientations: Record<string, string> = {
         front: 'swDrawingViewOrientations_e.swDrawingFrontView',
         back: 'swDrawingViewOrientations_e.swDrawingBackView',
@@ -157,7 +159,7 @@ Sub CreateDrawingView_${args.viewType}()
     swModel.ViewZoomtofit2
     swModel.EditRebuild3
 End Sub`;
-    }
+    })
   },
 
   {
@@ -183,9 +185,10 @@ End Sub`;
         lower: z.number().optional()
       }).optional(),
       prefix: z.string().optional(),
-      suffix: z.string().optional()
+      suffix: z.string().optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       return `
 Sub AddDimension_${args.dimensionType}()
     Dim swApp As SldWorks.SldWorks
@@ -276,7 +279,7 @@ Sub AddDimension_${args.dimensionType}()
     
     swModel.ClearSelection2 True
 End Sub`;
-    }
+    })
   },
 
   {
@@ -303,9 +306,10 @@ End Sub`;
         underline: z.boolean().optional()
       }).optional(),
       balloonStyle: z.enum(['circular', 'triangle', 'hexagon', 'box', 'diamond']).optional(),
-      itemNumber: z.number().optional()
+      itemNumber: z.number().optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       const annotations: Record<string, string> = {
         note: `
     ' Create note
@@ -442,7 +446,7 @@ Sub AddAnnotation_${args.annotationType}()
     
     swModel.EditRebuild3
 End Sub`;
-    }
+    })
   },
 
   {
@@ -459,9 +463,10 @@ End Sub`;
       headers: z.array(z.string()).optional(),
       data: z.array(z.array(z.string())).optional(),
       template: z.string().optional().describe('Path to table template'),
-      anchorType: z.enum(['top_left', 'top_right', 'bottom_left', 'bottom_right']).optional()
+      anchorType: z.enum(['top_left', 'top_right', 'bottom_left', 'bottom_right']).optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       return `
 Sub CreateTable_${args.tableType}()
     Dim swApp As SldWorks.SldWorks
@@ -578,7 +583,7 @@ Sub CreateTable_${args.tableType}()
     
     swModel.EditRebuild3
 End Sub`;
-    }
+    })
   },
 
   {
@@ -594,9 +599,10 @@ End Sub`;
       }).optional(),
       scale: z.string().optional().describe('Sheet scale (e.g., "1:2")'),
       templatePath: z.string().optional(),
-      titleBlockData: z.record(z.string()).optional()
+      titleBlockData: z.record(z.string()).optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       const sheetSizes: Record<string, [number, number]> = {
         A4: [210, 297],
         A3: [297, 420],
@@ -703,6 +709,6 @@ Sub ManageDrawingSheet_${args.operation}()
     
     swModel.EditRebuild3
 End Sub`;
-    }
+    })
   }
 ];

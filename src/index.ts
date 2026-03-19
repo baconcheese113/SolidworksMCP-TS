@@ -54,6 +54,9 @@ import { sketchTools } from './tools/sketch.js';
 import { templateManagerTools } from './tools/template-manager.js';
 import { nativeMacroTools } from './tools/native-macro.js';
 import { mcmasterTools } from './tools/mcmaster.js';
+import { propertyTools } from './tools/properties.js';
+import { assemblyInterrogationTools } from './tools/assembly-interrogation.js';
+import { engineeringCalcTools } from './tools/engineering-calc.js';
 
 // Import API
 import { SolidWorksAPI } from './solidworks/api.js';
@@ -185,6 +188,9 @@ class SolidWorksMCPServer {
       ...templateManagerTools,
       ...nativeMacroTools,
       ...mcmasterTools,
+      ...propertyTools,
+      ...assemblyInterrogationTools,
+      ...engineeringCalcTools,
       // Add macro tools
       {
         name: 'macro_start_recording',
@@ -316,7 +322,7 @@ class SolidWorksMCPServer {
         }
         
         // Ensure SolidWorks connection (skip for tools that don't need it)
-        const noSwRequired = name.startsWith('mcmaster_') || name.startsWith('macro_start') || name.startsWith('macro_stop') || name.startsWith('macro_export');
+        const noSwRequired = name.startsWith('mcmaster_') || name.startsWith('macro_start') || name.startsWith('macro_stop') || name.startsWith('macro_export') || name === 'tolerance_stack_analysis' || name === 'fit_analysis';
         if (!noSwRequired && !this.api.isConnected()) {
           await this.api.connect();
         }

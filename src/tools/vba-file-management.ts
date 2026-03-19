@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SolidWorksAPI } from '../solidworks/api.js';
+import { autoExecuteField, withAutoExecute } from '../utils/vba-auto-execute.js';
 
 /**
  * VBA Generation for File Management and PDM Operations
@@ -20,9 +21,10 @@ export const fileManagementVBATools = [
       fileFilter: z.string().optional().describe('File filter (e.g., "*.sldprt")'),
       exportFormat: z.enum(['step', 'iges', 'stl', 'pdf', 'dwg', 'parasolid']).optional(),
       includeSubfolders: z.boolean().optional().default(false),
-      options: z.record(z.any()).optional()
+      options: z.record(z.any()).optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       const operations: Record<string, string> = {
         open_all: `
 Sub BatchOpenFiles()
@@ -218,7 +220,7 @@ End Sub`
       };
 
       return operations[args.operation] || operations.open_all;
-    }
+    })
   },
 
   {
@@ -234,9 +236,10 @@ End Sub`
       })).optional(),
       sourcePath: z.string().optional(),
       templatePath: z.string().optional(),
-      exportFormat: z.enum(['excel', 'csv', 'xml']).optional()
+      exportFormat: z.enum(['excel', 'csv', 'xml']).optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       return `
 Sub ManageCustomProperties_${args.operation}()
     Dim swApp As SldWorks.SldWorks
@@ -367,7 +370,7 @@ Sub ManageCustomProperties_${args.operation}()
         MsgBox "Properties copied from source file"
     End If` : ''}
 End Sub`;
-    }
+    })
   },
 
   {
@@ -383,9 +386,10 @@ End Sub`;
       comment: z.string().optional(),
       stateName: z.string().optional(),
       searchCriteria: z.record(z.string()).optional(),
-      includeChildren: z.boolean().optional().default(true)
+      includeChildren: z.boolean().optional().default(true),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       return `
 Sub PDMOperation_${args.operation}()
     Dim pdmVault As Object ' EdmVault5
@@ -528,7 +532,7 @@ Private Function GetDocumentType(filePath As String) As Integer
         GetDocumentType = 0 ' Unknown
     End If
 End Function`;
-    }
+    })
   },
 
   {
@@ -543,9 +547,10 @@ End Function`;
         configurations: z.record(z.any()).optional()
       })).optional(),
       excelPath: z.string().optional(),
-      linkToExternal: z.boolean().optional()
+      linkToExternal: z.boolean().optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       return `
 Sub ManageDesignTable_${args.operation}()
     Dim swApp As SldWorks.SldWorks
@@ -677,6 +682,6 @@ Sub ManageDesignTable_${args.operation}()
     
     swModel.EditRebuild3
 End Sub`;
-    }
+    })
   }
 ];

@@ -4,6 +4,7 @@ import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { SolidWorksAPI } from '../solidworks/api.js';
+import { autoExecuteField, withAutoExecute } from '../utils/vba-auto-execute.js';
 
 // Import all VBA generation modules
 import { partModelingVBATools } from './vba-part.js';
@@ -113,8 +114,9 @@ const originalVBATools = [
         radius: z.number().optional(),
         count: z.number().optional(),
       }),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any, swApi: SolidWorksAPI) => {
+    handler: withAutoExecute((args: any, swApi: SolidWorksAPI) => {
       const vbaTemplates: Record<string, string> = {
         extrude: `
 Sub CreateExtrusion()
@@ -160,9 +162,9 @@ End Sub`,
       };
       
       return vbaTemplates[args.featureType] || 'Feature type not yet implemented';
-    },
+    }),
   },
-  
+
   {
     name: 'create_batch_vba',
     description: 'Generate VBA for batch processing multiple files',
@@ -172,8 +174,9 @@ End Sub`,
       outputFormat: z.string().optional().describe('Output format for export operations'),
       propertyName: z.string().optional().describe('Property name for update operations'),
       propertyValue: z.string().optional().describe('Property value for update operations'),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any, swApi: SolidWorksAPI) => {
+    handler: withAutoExecute((args: any, swApi: SolidWorksAPI) => {
       try {
         const template = compileTemplate('batch_process');
         return template({
@@ -186,9 +189,9 @@ End Sub`,
       } catch (error) {
         return `Failed to generate batch VBA: ${error}`;
       }
-    },
+    }),
   },
-  
+
   {
     name: 'run_vba_macro',
     description: 'Execute a VBA macro in SolidWorks',
@@ -221,8 +224,9 @@ End Sub`,
       template: z.string().describe('Drawing template path'),
       views: z.array(z.enum(['front', 'top', 'right', 'iso', 'section', 'detail'])),
       sheet_size: z.enum(['A4', 'A3', 'A2', 'A1', 'A0', 'Letter', 'Tabloid']),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any, swApi: SolidWorksAPI) => {
+    handler: withAutoExecute((args: any, swApi: SolidWorksAPI) => {
       try {
         const template = compileTemplate('create_drawing');
         return template({
@@ -234,7 +238,7 @@ End Sub`,
       } catch (error) {
         return `Failed to generate drawing VBA: ${error}`;
       }
-    },
+    }),
   },
 ];
 

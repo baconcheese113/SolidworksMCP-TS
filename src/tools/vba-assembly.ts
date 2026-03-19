@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { SolidWorksAPI } from '../solidworks/api.js';
+import { autoExecuteField, withAutoExecute } from '../utils/vba-auto-execute.js';
 
 /**
  * VBA Generation for Assembly Operations
@@ -23,9 +24,10 @@ export const assemblyVBATools = [
       distance: z.number().optional().describe('Distance in mm for distance mate'),
       angle: z.number().optional().describe('Angle in degrees for angle mate'),
       flip: z.boolean().optional(),
-      alignmentType: z.enum(['aligned', 'anti_aligned', 'closest']).optional()
+      alignmentType: z.enum(['aligned', 'anti_aligned', 'closest']).optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       const mateConstants: Record<string, string> = {
         coincident: 'swMateCOINCIDENT',
         parallel: 'swMatePARALLEL',
@@ -102,7 +104,7 @@ Sub CreateAssemblyMate_${args.mateType}()
     
     swAssy.ClearSelection2 True
 End Sub`;
-    }
+    })
   },
 
   {
@@ -120,9 +122,10 @@ End Sub`;
       }).optional(),
       quantity: z.number().optional(),
       patternType: z.enum(['linear', 'circular']).optional(),
-      spacing: z.number().optional().describe('Spacing in mm')
+      spacing: z.number().optional().describe('Spacing in mm'),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       const operations: Record<string, string> = {
         insert: `
 Sub InsertComponent()
@@ -273,7 +276,7 @@ End Sub`
       };
 
       return operations[args.operation] || 'Operation not supported';
-    }
+    })
   },
 
   {
@@ -287,9 +290,10 @@ End Sub`
       components: z.array(z.string()).optional().describe('Components to analyze'),
       outputPath: z.string().optional().describe('Path for results export'),
       includeSubassemblies: z.boolean().optional().default(true),
-      treatCoincidentAsInterference: z.boolean().optional().default(false)
+      treatCoincidentAsInterference: z.boolean().optional().default(false),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       const analyses: Record<string, string> = {
         interference: `
 Sub CheckInterference()
@@ -498,7 +502,7 @@ End Sub`
       };
 
       return analyses[args.analysisType] || 'Analysis type not supported';
-    }
+    })
   },
 
   {
@@ -510,9 +514,10 @@ End Sub`
       parentConfig: z.string().optional(),
       componentsToSuppress: z.array(z.string()).optional(),
       properties: z.record(z.string()).optional(),
-      displayStates: z.array(z.string()).optional()
+      displayStates: z.array(z.string()).optional(),
+      autoExecute: autoExecuteField
     }),
-    handler: (args: any) => {
+    handler: withAutoExecute((args: any) => {
       return `
 Sub ManageConfiguration_${args.operation}()
     Dim swApp As SldWorks.SldWorks
@@ -591,6 +596,6 @@ Sub ManageConfiguration_${args.operation}()
     
     swAssy.EditRebuild3
 End Sub`;
-    }
+    })
   }
 ];
