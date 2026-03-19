@@ -13,6 +13,87 @@ An MCP server that lets AI assistants (Claude, etc.) drive SolidWorks through it
 
 </div>
 
+## Workflow Examples
+
+Real-world engineering workflows showing how tools chain together. Each example is a task a physical sciences hardware or controls engineer might perform while designing instruments and fixtures.
+
+### Design a Detector Mounting Fixture
+
+You need a custom mount for a detector module. Search McMaster for shoulder bolts and dowel pins, create the part with a bolt pattern, verify the dowel press-fit, and check it into PDM.
+
+1. `mcmaster_search` — find M4 shoulder bolts and 6mm dowel pins
+2. `create_part` — new part document
+3. `create_sketch` + `sketch_circle` + `sketch_linear_pattern` — bolt hole pattern on mounting face
+4. `create_extrusion` — extrude the base plate
+5. `fit_analysis` — verify H7/g6 fit for dowel pin bores (clearance at assembly, light interference after cooling)
+6. `set_custom_properties` — stamp PartNumber, Project, Material, Engineer
+7. `vba_pdm_operations` — check in to vault with comment
+
+### Build an Instrument Assembly & Generate BOM
+
+Assemble an optical instrument from custom parts and COTS hardware, then extract a BOM for procurement.
+
+1. `open_model` — open the top-level assembly
+2. `vba_assembly_components` — insert sub-assemblies and parts
+3. `vba_assembly_mates` — constrain components (coincident, concentric, distance)
+4. `mcmaster_download_cad` — download STEP files for purchased fasteners, bearings, O-rings
+5. `check_interference` — verify no collisions between components
+6. `tolerance_stack_analysis` — stack up the critical optical path (detector to lens mount)
+7. `extract_bom` — export structured BOM as JSON or CSV with vendor info and quantities
+
+### Release a Drawing Package for Shop Fabrication
+
+Create a drawing from a finished part, add views and dimensions, and release through PDM.
+
+1. `create_drawing_from_model` — new drawing from the 3D part
+2. `add_drawing_view` + `add_section_view` — front, side, isometric, and section views
+3. `add_dimensions` — add critical dimensions to views
+4. `update_sheet_format` — fill title block (drawn by, date, project, revision)
+5. `export_file` — export as PDF for the machine shop
+6. `vba_pdm_operations` — transition workflow state from WIP to Released
+
+### Source and Qualify a COTS Part from McMaster-Carr
+
+Find a part on McMaster, review specs, download the CAD model, and add it to your PDM vault with full metadata.
+
+1. `mcmaster_search` — search for "linear ball bearing 12mm"
+2. `mcmaster_part_details` — review full specs, pricing, and lead time
+3. `mcmaster_download_cad` — download STEP model to local path
+4. `mcmaster_add_to_pdm` — stamp McMaster metadata as custom properties and generate VBA to add to vault
+
+### Batch Update Custom Properties Across a Project
+
+A project code changed and you need to update the Project property on 50 files in the vault.
+
+1. `vba_pdm_operations` — check out target files from vault
+2. `vba_custom_properties` — batch set Project, Revision, and Engineer properties
+3. `vba_pdm_operations` — check in all files with comment "Updated project code to PRJ-2024-042"
+
+### Analyze a Press-Fit for a Precision Instrument
+
+Verify that an Invar alignment pin will maintain proper interference in an aluminum housing across the operating temperature range.
+
+1. `fit_analysis` — calculate H7/p6 limits at 25mm nominal (room temperature)
+2. `tolerance_stack_analysis` — stack up housing bore tolerance, pin OD tolerance, and thermal dimensional changes
+3. Review the min/max clearance and interference to confirm the fit holds from 20°C assembly down to operating conditions
+
+### Create a Parametric Part with Configurations
+
+Design a mounting bracket in multiple sizes driven by a design table.
+
+1. `create_part` + `create_sketch` + `sketch_rectangle` + `create_extrusion` — base geometry
+2. `vba_configurations` — create Small, Medium, Large configurations
+3. `vba_equations` — link hole spacing and wall thickness to a driving dimension
+4. `vba_design_table` — generate an Excel-driven design table for all size variants
+
+### Automate Drawing Standards Across a Project
+
+Ensure all drawings in a project use the same title block, border, and format settings.
+
+1. `extract_drawing_template` — capture settings from the master/reference drawing
+2. `batch_apply_template` — apply to all child drawings in the project folder
+3. `compare_drawing_templates` — verify consistency and flag any deviations
+
 ## How It Works
 
 ```
