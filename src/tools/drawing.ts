@@ -5,7 +5,7 @@ import { SolidWorksConfig } from '../utils/solidworks-config.js';
 export const drawingTools = [
   {
     name: 'create_drawing_from_model',
-    description: 'Create a new drawing from the current 3D model',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Create a new drawing document (.slddrw) with an initial view from the active 3D model. Use add_drawing_view to add more views afterward.',
     inputSchema: z.object({
       template: z.string().describe('Drawing template path'),
       sheet_size: z.enum(['A4', 'A3', 'A2', 'A1', 'A0', 'Letter', 'Tabloid']).optional(),
@@ -112,7 +112,7 @@ export const drawingTools = [
   
   {
     name: 'add_drawing_view',
-    description: 'Add a view to the current drawing',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Insert a standard, projected, or isometric view into the active drawing. A drawing must be open (use create_drawing_from_model first).',
     inputSchema: z.object({
       viewType: z.enum(['front', 'top', 'right', 'back', 'bottom', 'left', 'iso', 'current']),
       modelPath: z.string().describe('Path to the model file'),
@@ -165,7 +165,7 @@ export const drawingTools = [
   
   {
     name: 'add_section_view',
-    description: 'Add a section view to the drawing',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Insert a section view cut along a line in an existing view. A drawing with at least one view must be open.',
     inputSchema: z.object({
       parentView: z.string().describe('Name of the parent view'),
       x: z.number().describe('X position on sheet (mm)'),
@@ -195,7 +195,7 @@ export const drawingTools = [
   
   {
     name: 'add_dimensions',
-    description: 'Add dimensions to a drawing view',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Add reference dimensions to a drawing view. Different from add_sketch_dimension which dimensions sketch entities in a 3D model.',
     inputSchema: z.object({
       viewName: z.string().describe('Name of the view to dimension'),
       autoArrange: z.boolean().default(true).describe('Automatically arrange dimensions'),
@@ -233,7 +233,7 @@ export const drawingTools = [
   
   {
     name: 'update_sheet_format',
-    description: 'Update drawing sheet format and properties',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Update the title block, border, or custom properties on the active drawing sheet.',
     inputSchema: z.object({
       properties: z.object({
         title: z.string().optional(),

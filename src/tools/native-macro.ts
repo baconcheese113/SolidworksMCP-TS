@@ -18,7 +18,7 @@ export const nativeMacroTools = [
   
   {
     name: 'start_native_macro_recording',
-    description: 'Start recording a macro using SolidWorks native VBA recorder',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Start the native SolidWorks macro recorder. All user actions in SolidWorks will be captured as VBA until stop_native_macro_recording is called.',
     inputSchema: z.object({
       macroPath: z.string().describe('Full path where the macro will be saved (e.g., C:\\Macros\\MyMacro.swp)'),
       pauseRecording: z.boolean().default(false).describe('Start in paused state'),
@@ -80,7 +80,7 @@ export const nativeMacroTools = [
 
   {
     name: 'stop_native_macro_recording',
-    description: 'Stop the current native macro recording and save',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Stop the native macro recorder and save the recorded VBA to a .swp file.',
     inputSchema: z.object({
       openInEditor: z.boolean().default(false).describe('Open macro in VBA editor after saving'),
       runMacro: z.boolean().default(false).describe('Run the macro immediately after saving')
@@ -126,7 +126,7 @@ export const nativeMacroTools = [
 
   {
     name: 'pause_resume_macro_recording',
-    description: 'Pause or resume the current macro recording',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Toggle pause/resume on the active macro recording session.',
     inputSchema: z.object({
       action: z.enum(['pause', 'resume']).describe('Action to perform')
     }),
@@ -158,7 +158,7 @@ export const nativeMacroTools = [
   
   {
     name: 'run_macro',
-    description: 'Run a SolidWorks macro file',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Execute an existing .swp or .swb macro file from disk in the active SolidWorks session. For running VBA code strings directly, use run_vba_macro instead.',
     inputSchema: z.object({
       macroPath: z.string().describe('Full path to the macro file (.swp or .swb)'),
       moduleName: z.string().default('main').describe('Module name containing the macro'),
@@ -220,7 +220,7 @@ export const nativeMacroTools = [
 
   {
     name: 'edit_macro',
-    description: 'Open a macro in the SolidWorks VBA editor',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Open a macro file in the SolidWorks VBA IDE for editing.',
     inputSchema: z.object({
       macroPath: z.string().describe('Full path to the macro file')
     }),
@@ -258,7 +258,7 @@ export const nativeMacroTools = [
   
   {
     name: 'create_initialized_macro',
-    description: 'Create a new macro with proper SolidWorks VBA initialization',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Create a new .swp macro file with proper SolidWorks module initialization, early binding, and error handling boilerplate.',
     inputSchema: z.object({
       macroPath: z.string().describe('Path where the macro will be saved'),
       macroName: z.string().describe('Name of the macro'),
@@ -328,7 +328,7 @@ export const nativeMacroTools = [
 
   {
     name: 'convert_text_to_native_macro',
-    description: 'Convert plain text VBA code to a properly initialized SolidWorks macro',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Wrap raw VBA code with proper SolidWorks macro initialization: module declarations, early binding setup, and error handling.',
     inputSchema: z.object({
       vbaCode: z.string().describe('Plain text VBA code to convert'),
       outputPath: z.string().describe('Path where the converted macro will be saved'),
@@ -459,7 +459,7 @@ End Sub`;
   
   {
     name: 'batch_run_macros',
-    description: 'Run multiple macros in sequence',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Execute a list of .swp/.swb macro files one after another in the active SolidWorks session, with optional delay between each.',
     inputSchema: z.object({
       macros: z.array(z.object({
         path: z.string().describe('Macro file path'),

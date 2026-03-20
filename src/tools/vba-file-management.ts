@@ -10,7 +10,7 @@ import { autoExecuteField, withAutoExecute } from '../utils/vba-auto-execute.js'
 export const fileManagementVBATools = [
   {
     name: 'vba_batch_operations',
-    description: 'Generate VBA for batch file operations',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to traverse folders, open/close files, export in bulk, or rename files. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       operation: z.enum([
         'open_all', 'save_all', 'export_all', 'convert_format',
@@ -225,7 +225,7 @@ End Sub`
 
   {
     name: 'vba_custom_properties',
-    description: 'Generate VBA for managing custom properties',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to read, write, or delete custom properties across files. For live property access on the active document, use get_custom_properties or set_custom_properties instead. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       operation: z.enum(['add', 'modify', 'delete', 'copy', 'export', 'import']),
       properties: z.array(z.object({
@@ -375,7 +375,7 @@ End Sub`;
 
   {
     name: 'vba_pdm_operations',
-    description: 'Generate VBA for PDM vault operations',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA for PDM check-in, check-out, add file, get latest, transition workflow state, or vault search. Requires Windows + SolidWorks PDM to run the generated macro.',
     inputSchema: z.object({
       operation: z.enum([
         'check_in', 'check_out', 'get_latest', 'add_file',
@@ -537,7 +537,7 @@ End Function`;
 
   {
     name: 'vba_design_table',
-    description: 'Generate VBA for creating and managing design tables',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to create, modify, or delete Excel-driven design tables that control configurations. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       operation: z.enum(['create', 'update', 'export', 'import', 'link_excel']),
       tableName: z.string(),

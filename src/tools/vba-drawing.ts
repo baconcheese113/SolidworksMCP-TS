@@ -10,7 +10,7 @@ import { autoExecuteField, withAutoExecute } from '../utils/vba-auto-execute.js'
 export const drawingVBATools = [
   {
     name: 'vba_create_drawing_views',
-    description: 'Generate VBA for creating drawing views',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to add standard, projected, section, detail, or auxiliary views to a drawing. For live view creation, use add_drawing_view or add_section_view instead. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       viewType: z.enum([
         'standard', 'projected', 'auxiliary', 'section', 'detail',
@@ -164,7 +164,7 @@ End Sub`;
 
   {
     name: 'vba_drawing_dimensions',
-    description: 'Generate VBA for adding dimensions to drawings',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to add dimensions and tolerances to drawing views. For live dimensioning, use add_dimensions instead. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       dimensionType: z.enum([
         'linear', 'angular', 'radial', 'diameter', 'ordinate',
@@ -284,7 +284,7 @@ End Sub`;
 
   {
     name: 'vba_drawing_annotations',
-    description: 'Generate VBA for adding annotations to drawings',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to add notes, GD&T symbols, surface finish marks, weld symbols, balloons, or revision tables to drawings. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       annotationType: z.enum([
         'note', 'balloon', 'datum', 'geometric_tolerance',
@@ -451,7 +451,7 @@ End Sub`;
 
   {
     name: 'vba_drawing_tables',
-    description: 'Generate VBA for creating tables in drawings',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to insert BOMs, hole tables, revision tables, or general tables into drawings. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       tableType: z.enum(['general', 'hole', 'revision', 'bom', 'weldment_cutlist']),
       position: z.object({
@@ -588,7 +588,7 @@ End Sub`;
 
   {
     name: 'vba_drawing_sheet_format',
-    description: 'Generate VBA for managing drawing sheets and formats',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to add/remove sheets, set sheet formats, or update title blocks. For live sheet format updates, use update_sheet_format instead. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       operation: z.enum(['create_sheet', 'modify_format', 'title_block', 'border']),
       sheetName: z.string().optional(),

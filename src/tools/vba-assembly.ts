@@ -10,7 +10,7 @@ import { autoExecuteField, withAutoExecute } from '../utils/vba-auto-execute.js'
 export const assemblyVBATools = [
   {
     name: 'vba_assembly_mates',
-    description: 'Generate VBA for creating assembly mates',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to add coincident, concentric, distance, angle, and other mate types between assembly components. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       mateType: z.enum([
         'coincident', 'parallel', 'perpendicular', 'tangent', 'concentric',
@@ -109,7 +109,7 @@ End Sub`;
 
   {
     name: 'vba_assembly_components',
-    description: 'Generate VBA for inserting and managing components',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to insert, delete, replace, or reorder components in an assembly. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       operation: z.enum(['insert', 'replace', 'pattern', 'mirror', 'explode', 'dissolve']),
       componentPath: z.string().optional().describe('Path to component file'),
@@ -281,7 +281,7 @@ End Sub`
 
   {
     name: 'vba_assembly_analysis',
-    description: 'Generate VBA for assembly analysis',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA for interference detection, mass properties, or component statistics in assemblies. For live interference checking, use check_interference instead. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       analysisType: z.enum([
         'interference', 'clearance', 'collision', 'mass_properties',
@@ -507,7 +507,7 @@ End Sub`
 
   {
     name: 'vba_assembly_configurations',
-    description: 'Generate VBA for managing assembly configurations',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to create, delete, or modify assembly configurations and component display states. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       operation: z.enum(['create', 'modify', 'suppress', 'delete', 'copy']),
       configName: z.string(),

@@ -319,17 +319,16 @@ These tools generate ready-to-run VBA macro code. They don't require a live Soli
 | `convert_text_to_native_macro` | Convert plain text VBA code to a properly initialized SolidWorks macro |
 | `batch_run_macros` | Run multiple macros in sequence |
 
-### McMaster-Carr (5 tools)
+### McMaster-Carr (4 tools)
 
-Search McMaster-Carr, get full part details (specs, pricing, delivery), download CAD files, and add parts to your PDM vault with metadata. Works on any platform — no SolidWorks connection needed.
+Search McMaster-Carr, get full part details (specs, pricing, delivery), download CAD files, and add parts to your PDM vault with metadata. Works on any platform — no SolidWorks connection needed. No manual cookies required — Chrome obtains session automatically.
 
-| Tool | Auth | Description |
-|------|:---:|---|
-| `mcmaster_search` | No | Search catalog by keyword or category |
-| `mcmaster_part_details` | No (basic) | Pricing and delivery. With browser cookies: full specs table, images, CAD paths |
-| `mcmaster_set_cookies` | - | Provide browser cookies for authenticated endpoints (`cat` cookie required) |
-| `mcmaster_download_cad` | Yes | Download STEP, SLDPRT, IGES, DWG, etc. to a local path |
-| `mcmaster_add_to_pdm` | Yes | Download CAD + stamp metadata as custom properties + generate PDM add VBA |
+| Tool | Description |
+|------|---|
+| `mcmaster_search` | Search catalog by keyword — returns product categories with descriptions, counts, and available filters |
+| `mcmaster_part_details` | Full specs table, pricing, delivery, CAD file paths, and images for a specific part number |
+| `mcmaster_download_cad` | Download STEP, SLDPRT, IGES, DWG, etc. to a local path |
+| `mcmaster_add_to_pdm` | Download CAD + stamp metadata as custom properties + generate PDM add VBA |
 
 ## Development
 

@@ -4,7 +4,7 @@ import { SolidWorksAPI } from '../solidworks/api.js';
 
 export const extrusionHelper = {
   name: 'simple_extrude',
-  description: 'Simplified extrusion helper',
+  description: 'REQUIRES WINDOWS + SOLIDWORKS. One-step extrusion: creates a sketch, adds geometry, closes the sketch, and extrudes in a single call. Simpler than the manual create_sketch → sketch geometry → exit_sketch → create_extrusion sequence but less flexible.',
   inputSchema: z.object({
     depth: z.number().describe('Extrusion depth in mm'),
   }),

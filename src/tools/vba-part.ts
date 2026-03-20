@@ -10,7 +10,7 @@ import { autoExecuteField, withAutoExecute } from '../utils/vba-auto-execute.js'
 export const partModelingVBATools = [
   {
     name: 'vba_create_reference_geometry',
-    description: 'Generate VBA for creating reference geometry (planes, axes, points)',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to create reference planes, axes, coordinate systems, or points. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       geometryType: z.enum(['plane', 'axis', 'point', 'coordinate_system']),
       referenceType: z.enum(['offset', 'angle', 'parallel', 'perpendicular', 'midplane', '3points']),
@@ -126,7 +126,7 @@ End Sub`
 
   {
     name: 'vba_advanced_features',
-    description: 'Generate VBA for advanced features (sweep, loft, boundary)',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA for sweeps, lofts, boundary features, and other advanced solid operations. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       featureType: z.enum(['sweep', 'loft', 'boundary', 'wrap', 'flex', 'deform']),
       profiles: z.array(z.string()).describe('Sketch names for profiles'),
@@ -263,7 +263,7 @@ End Sub`
 
   {
     name: 'vba_pattern_features',
-    description: 'Generate VBA for pattern features',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA for linear, circular, curve-driven, sketch-driven, or table-driven patterns. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       patternType: z.enum(['linear', 'circular', 'curve', 'fill', 'variable']),
       featureNames: z.array(z.string()).describe('Features to pattern'),
@@ -390,7 +390,7 @@ End Sub`
 
   {
     name: 'vba_sheet_metal',
-    description: 'Generate VBA for sheet metal operations',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA for base flanges, edge flanges, miter flanges, hems, bends, and flat pattern operations. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       operation: z.enum(['base_flange', 'edge_flange', 'miter_flange', 'hem', 'jog', 'fold', 'unfold']),
       thickness: z.number().describe('Material thickness in mm'),
@@ -463,7 +463,7 @@ End Sub`;
 
   {
     name: 'vba_surface_modeling',
-    description: 'Generate VBA for surface modeling operations',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA for extruded surfaces, revolved surfaces, swept surfaces, lofted surfaces, offsets, trims, and knits. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       surfaceType: z.enum(['extrude', 'revolve', 'sweep', 'loft', 'boundary', 'offset', 'thicken', 'knit']),
       sketches: z.array(z.string()).describe('Sketch names'),

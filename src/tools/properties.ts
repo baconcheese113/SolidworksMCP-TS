@@ -8,7 +8,7 @@ import { SolidWorksAPI } from '../solidworks/api.js';
 
 export const getCustomPropertiesTool = {
     name: 'get_custom_properties',
-    description: 'Read all custom properties from the active document, optionally for a specific configuration',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Read all custom properties from the active document. For bulk property management across many files, use vba_custom_properties to generate a VBA macro instead.',
     inputSchema: z.object({
       configuration: z.string().optional().describe('Configuration name (empty string or omit for document-level properties)')
     }),
@@ -70,7 +70,7 @@ export const getCustomPropertiesTool = {
 
 export const setCustomPropertiesTool = {
     name: 'set_custom_properties',
-    description: 'Set one or more custom properties on the active document',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Write custom properties to the active document. For bulk property updates across many files, use vba_custom_properties to generate a VBA macro instead.',
     inputSchema: z.object({
       properties: z.array(z.object({
         name: z.string(),
@@ -118,7 +118,7 @@ export const setCustomPropertiesTool = {
 
 export const getFeatureTreeTool = {
     name: 'get_feature_tree',
-    description: 'Return the full feature tree of the active document as structured JSON',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Walk the feature tree and return every feature with its type, name, suppression state, and child features. Useful for discovering dimension names before calling get_dimension or set_dimension.',
     inputSchema: z.object({
       includeSuppressionState: z.boolean().default(true),
       maxFeatures: z.number().default(500).describe('Maximum features to return')
@@ -180,7 +180,7 @@ export const getFeatureTreeTool = {
 
 export const getActiveDocumentInfoTool = {
     name: 'get_active_document_info',
-    description: 'Get comprehensive info about the active document: path, type, title, configurations, material, units, saved state',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Return metadata about the active document: file path, document type (part/assembly/drawing), title, configurations list, material, unit system, and saved state.',
     inputSchema: z.object({}),
     handler: (_args: any, swApi: SolidWorksAPI) => {
       const model = swApi.getCurrentModel();

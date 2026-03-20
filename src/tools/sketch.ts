@@ -16,7 +16,7 @@ export const sketchTools = [
   
   {
     name: 'create_sketch',
-    description: 'Create a new sketch on a specified plane or face',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Open a new sketch on a plane (Front, Top, Right) or a planar face. The sketch stays in edit mode — add geometry with sketch_line, sketch_circle, etc., then call exit_sketch when done.',
     inputSchema: z.object({
       plane: z.enum(['Front', 'Top', 'Right', 'Custom']).default('Front').describe('Reference plane for sketch'),
       offset: z.number().default(0).describe('Offset distance from plane in mm'),
@@ -137,7 +137,7 @@ export const sketchTools = [
 
   {
     name: 'edit_sketch',
-    description: 'Enter sketch edit mode for an existing sketch',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Re-enter edit mode for an existing sketch by name (e.g. "Sketch1"). Use this to modify a previously created sketch.',
     inputSchema: z.object({
       sketchName: z.string().describe('Name of the sketch to edit')
     }),
@@ -165,7 +165,7 @@ export const sketchTools = [
 
   {
     name: 'exit_sketch',
-    description: 'Exit sketch edit mode and rebuild',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Close the active sketch and rebuild the model. Must be called after adding sketch geometry and before creating features like extrusions.',
     inputSchema: z.object({
       rebuild: z.boolean().default(true).describe('Rebuild model after exiting sketch')
     }),
@@ -198,7 +198,7 @@ export const sketchTools = [
   
   {
     name: 'sketch_line',
-    description: 'Draw a line in the active sketch',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Add a line segment between two points in the active sketch. A sketch must be open (create_sketch or edit_sketch first).',
     inputSchema: z.object({
       start: z.object({
         x: z.number().describe('Start X coordinate in mm'),
@@ -246,7 +246,7 @@ export const sketchTools = [
 
   {
     name: 'sketch_centerline',
-    description: 'Draw a centerline in the active sketch',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Add a construction centerline between two points. Used as mirror axes and for revolved features. A sketch must be open first.',
     inputSchema: z.object({
       start: z.object({
         x: z.number().describe('Start X coordinate in mm'),
@@ -285,7 +285,7 @@ export const sketchTools = [
   
   {
     name: 'sketch_circle',
-    description: 'Draw a circle in the active sketch',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Add a circle at a center point with a given radius. A sketch must be open first.',
     inputSchema: z.object({
       center: z.object({
         x: z.number().describe('Center X coordinate in mm'),
@@ -330,7 +330,7 @@ export const sketchTools = [
 
   {
     name: 'sketch_arc',
-    description: 'Draw an arc in the active sketch',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Add an arc segment. A sketch must be open first.',
     inputSchema: z.object({
       center: z.object({
         x: z.number().describe('Center X coordinate in mm'),
@@ -390,7 +390,7 @@ export const sketchTools = [
   
   {
     name: 'sketch_rectangle',
-    description: 'Draw a rectangle in the active sketch',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Add a rectangle defined by two corner points. A sketch must be open first.',
     inputSchema: z.object({
       corner1: z.object({
         x: z.number().describe('First corner X coordinate in mm'),
@@ -456,7 +456,7 @@ export const sketchTools = [
 
   {
     name: 'sketch_polygon',
-    description: 'Draw a regular polygon in the active sketch',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Add an inscribed or circumscribed regular polygon. A sketch must be open first.',
     inputSchema: z.object({
       center: z.object({
         x: z.number().describe('Center X coordinate in mm'),
@@ -532,7 +532,7 @@ export const sketchTools = [
   
   {
     name: 'sketch_spline',
-    description: 'Draw a spline through points in the active sketch',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Add a spline curve through an array of points. A sketch must be open first.',
     inputSchema: z.object({
       points: z.array(z.object({
         x: z.number().describe('X coordinate in mm'),
@@ -587,7 +587,7 @@ export const sketchTools = [
 
   {
     name: 'sketch_ellipse',
-    description: 'Draw an ellipse in the active sketch',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Add an ellipse at a center point. A sketch must be open first.',
     inputSchema: z.object({
       center: z.object({
         x: z.number().describe('Center X coordinate in mm'),
@@ -659,7 +659,7 @@ export const sketchTools = [
   
   {
     name: 'add_sketch_constraint',
-    description: 'Add constraints between sketch entities',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Add geometric constraints (coincident, concentric, parallel, perpendicular, tangent, equal, horizontal, vertical, midpoint, colinear) to sketch entities.',
     inputSchema: z.object({
       type: z.enum([
         'coincident', 'parallel', 'perpendicular', 'tangent',
@@ -727,7 +727,7 @@ export const sketchTools = [
   
   {
     name: 'add_sketch_dimension',
-    description: 'Add dimensions to sketch entities',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Add driving dimensions to sketch entities to fully constrain the sketch. Different from add_dimensions which adds dimensions to drawing views.',
     inputSchema: z.object({
       type: z.enum(['linear', 'angular', 'radial', 'diameter']).describe('Type of dimension'),
       entity: z.string().describe('Entity to dimension'),
@@ -791,7 +791,7 @@ export const sketchTools = [
   
   {
     name: 'sketch_linear_pattern',
-    description: 'Create a linear pattern of sketch entities',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Repeat selected sketch entities in a linear grid pattern.',
     inputSchema: z.object({
       entities: z.array(z.string()).describe('Entities to pattern'),
       direction1: z.object({
@@ -838,7 +838,7 @@ export const sketchTools = [
 
   {
     name: 'sketch_circular_pattern',
-    description: 'Create a circular pattern of sketch entities',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Repeat selected sketch entities in a circular/radial pattern.',
     inputSchema: z.object({
       entities: z.array(z.string()).describe('Entities to pattern'),
       center: z.object({
@@ -884,7 +884,7 @@ export const sketchTools = [
   
   {
     name: 'sketch_mirror',
-    description: 'Mirror sketch entities about a line',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Mirror selected sketch entities about a centerline or sketch line.',
     inputSchema: z.object({
       entities: z.array(z.string()).describe('Entities to mirror'),
       mirrorLine: z.string().describe('Mirror line (centerline or construction line)'),
@@ -921,7 +921,7 @@ export const sketchTools = [
 
   {
     name: 'sketch_offset',
-    description: 'Create offset curves from sketch entities',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Create offset copies of sketch entities at a specified distance.',
     inputSchema: z.object({
       entities: z.array(z.string()).describe('Entities to offset'),
       distance: z.number().describe('Offset distance in mm (positive = outward)'),

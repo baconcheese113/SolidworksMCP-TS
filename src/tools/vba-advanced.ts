@@ -10,7 +10,7 @@ import { autoExecuteField, withAutoExecute } from '../utils/vba-auto-execute.js'
 export const advancedVBATools = [
   {
     name: 'vba_configurations',
-    description: 'Generate VBA for managing configurations',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to create, delete, activate, or modify configurations and their dimension overrides. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       operation: z.enum(['create', 'derive', 'suppress_features', 'set_properties', 'table_driven']),
       configName: z.string(),
@@ -119,7 +119,7 @@ End Sub`;
 
   {
     name: 'vba_equations',
-    description: 'Generate VBA for managing equations and global variables',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to add, edit, or delete equations and global variables that drive parametric dimensions. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       operation: z.enum(['add', 'modify', 'delete', 'link', 'export']),
       equations: z.array(z.object({
@@ -242,7 +242,7 @@ End Sub`;
 
   {
     name: 'vba_simulation_setup',
-    description: 'Generate VBA for setting up simulation studies',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to create simulation studies with loads, fixtures, mesh settings, and run configurations. Requires Windows + SolidWorks Simulation to run the generated macro.',
     inputSchema: z.object({
       studyType: z.enum(['static', 'frequency', 'buckling', 'thermal', 'nonlinear', 'dynamic']),
       studyName: z.string(),
@@ -374,7 +374,7 @@ End Sub`;
 
   {
     name: 'vba_api_automation',
-    description: 'Generate VBA for advanced API automation and event handling',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA for event handlers, custom menus, property manager pages, and advanced COM automation patterns. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       automationType: z.enum(['event_handler', 'macro_feature', 'property_page', 'add_in']),
       eventTypes: z.array(z.enum([
@@ -636,7 +636,7 @@ End Sub` : ''}`;
 
   {
     name: 'vba_error_handling',
-    description: 'Generate VBA with comprehensive error handling and logging',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Wraps generated VBA with try/catch error handling, logging to file, and user-friendly error messages. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       functionName: z.string(),
       operationType: z.string(),

@@ -100,7 +100,7 @@ function parseFitCode(code: string): { letter: string; grade: number } {
 
 export const toleranceStackAnalysisTool = {
     name: 'tolerance_stack_analysis',
-    description: '1D tolerance stack-up analysis using worst-case and RSS (root sum of squares) methods',
+    description: 'NO SOLIDWORKS NEEDED — runs on any platform. 1D tolerance stack-up analysis using worst-case and RSS (root sum of squares) methods',
     inputSchema: z.object({
       dimensions: z.array(z.object({
         name: z.string().describe('Dimension label'),
@@ -213,7 +213,7 @@ export const toleranceStackAnalysisTool = {
 
 export const fitAnalysisTool = {
     name: 'fit_analysis',
-    description: 'ISO 286 shaft/hole fit calculator. Given a nominal size and fit designation, returns limits, clearance/interference, and fit type.',
+    description: 'NO SOLIDWORKS NEEDED — runs on any platform. ISO 286 shaft/hole fit calculator. Given a nominal size and fit designation, returns limits, clearance/interference, and fit type.',
     inputSchema: z.object({
       nominalSize: z.number().min(0.001).max(500).describe('Nominal diameter in mm'),
       holeFit: z.string().describe('Hole fit code (e.g. H7, H8, G7)'),

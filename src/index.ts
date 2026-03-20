@@ -322,7 +322,7 @@ class SolidWorksMCPServer {
         }
         
         // Ensure SolidWorks connection (skip for tools that don't need it)
-        const noSwRequired = name.startsWith('mcmaster_') || name.startsWith('macro_start') || name.startsWith('macro_stop') || name.startsWith('macro_export') || name === 'tolerance_stack_analysis' || name === 'fit_analysis';
+        const noSwRequired = name.startsWith('mcmaster_') || name.startsWith('vba_') || name.startsWith('macro_start') || name.startsWith('macro_stop') || name.startsWith('macro_export') || name === 'tolerance_stack_analysis' || name === 'fit_analysis' || name === 'create_feature_vba' || name === 'create_batch_vba' || name === 'create_drawing_vba' || name === 'generate_vba_script';
         if (!noSwRequired && !this.api.isConnected()) {
           await this.api.connect();
         }

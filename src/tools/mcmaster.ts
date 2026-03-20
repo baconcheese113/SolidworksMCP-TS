@@ -2,118 +2,63 @@
  * McMaster-Carr Integration Tools
  *
  * Provides search, part details, and CAD file download from McMaster-Carr.
- * Uses McMaster's internal web part endpoints (reverse-engineered from browser network requests).
+ * All requests go through headless Chrome (puppeteer-core) to bypass Akamai
+ * Bot Manager's TLS fingerprinting and JavaScript-based bot detection.
  *
- * Endpoint map:
- *   ProductOrderInfo.aspx   — pricing, delivery, description (no auth needed)
- *   ItmPrsnttnWebPart.aspx  — full specs, images, CAD info (needs `cat` cookie)
- *   ProductContent.aspx     — CAD download file paths (needs `cat` cookie)
+ * No manual cookies needed — Chrome obtains the `cat` session token automatically
+ * via stealth evasion (disabling automation signals).
  *
- * NOTE: These endpoints may change if McMaster updates their site.
- * The version hash in the URL path (e.g. "mv1773779392") rotates periodically.
+ * Data sources:
+ *   ProductOrderInfo.aspx — pricing, delivery, description
+ *   ProductContent.aspx   — CAD download file paths
+ *   DOM extraction         — full specs table from rendered product page
  */
 
 import { z } from 'zod';
 import { logInfo, logError, logOperation } from '../utils/logger.js';
+import {
+  browserFetch,
+  closeBrowser,
+  getBrowserCookieValue,
+  hasBrowserCookie,
+  navigateTo,
+  resetSession,
+} from '../utils/browser-fetch.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const MCMASTER_BASE = 'https://www.mcmaster.com';
 
-// Session state
-let sessionCookies: string[] = [];
+// Version hash and content version — extracted from browser cookies
 let versionHash: string = '';
 let contentVersion: string = 'mvC';
-let mcmFeatures: string = '';
 
 /**
- * Make an HTTP request to McMaster-Carr with proper headers.
- * Authenticated requests include x-mcm-features when available.
+ * Ensure we have the versionHash from browser cookies.
+ * This is called after ensureBrowser() has navigated to mcmaster.com.
  */
-async function mcmasterFetch(url: string, options: RequestInit = {}, authenticated = false): Promise<Response> {
-  const headers: Record<string, string> = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36',
-    'Accept': '*/*',
-    'Accept-Language': 'en-US,en;q=0.9',
-    'Referer': MCMASTER_BASE,
-    'x-requested-with': 'XMLHttpRequest',
-    ...(options.headers as Record<string, string> || {}),
-  };
+async function ensureVersionHash(): Promise<void> {
+  if (versionHash) return;
 
-  if (authenticated && mcmFeatures) {
-    headers['x-mcm-features'] = mcmFeatures;
-  }
-
-  if (sessionCookies.length > 0) {
-    headers['Cookie'] = sessionCookies.join('; ');
-  }
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    redirect: 'follow',
-  });
-
-  // Capture set-cookie headers for session persistence
-  const setCookies = response.headers.getSetCookie?.() || [];
-  for (const cookie of setCookies) {
-    const name = cookie.split('=')[0];
-    sessionCookies = sessionCookies.filter(c => !c.startsWith(name + '='));
-    sessionCookies.push(cookie.split(';')[0]);
-  }
-
-  return response;
-}
-
-/**
- * Check whether we have the `cat` cookie needed for authenticated endpoints.
- */
-function hasAuthCookie(): boolean {
-  return sessionCookies.some(c => c.startsWith('cat='));
-}
-
-/**
- * Initialize a session and extract the version hash from McMaster's homepage.
- */
-async function ensureSession(): Promise<void> {
-  if (sessionCookies.length > 0 && versionHash) return;
-
-  logInfo('Initializing McMaster-Carr session');
   try {
-    const response = await mcmasterFetch(MCMASTER_BASE);
-    const html = await response.text();
-
-    const volverMatch = sessionCookies.find(c => c.startsWith('volver='));
-    if (volverMatch) {
-      versionHash = volverMatch.split('=')[1];
+    const volver = await getBrowserCookieValue('volver');
+    if (volver) {
+      versionHash = volver;
     }
-
-    if (!versionHash) {
-      const hashMatch = html.match(/\/(mv\d+)\//);
-      if (hashMatch) {
-        versionHash = hashMatch[1];
-      }
+    const stbver = await getBrowserCookieValue('stbver');
+    if (stbver) {
+      contentVersion = stbver;
     }
-
-    const stbverMatch = sessionCookies.find(c => c.startsWith('stbver='));
-    if (stbverMatch) {
-      contentVersion = stbverMatch.split('=')[1];
-    }
-
-    if (!versionHash) {
-      versionHash = 'mv1773779392';
-      logInfo('Using fallback version hash', { versionHash });
-    }
-
-    logInfo('McMaster-Carr session initialized', {
-      cookies: sessionCookies.length,
-      versionHash,
-      contentVersion,
-    });
-  } catch (error) {
-    logError('Failed to initialize McMaster-Carr session', error);
-    throw new Error('Could not establish session with McMaster-Carr. Check your internet connection.');
+  } catch {
+    // getBrowserCookieValue triggers ensureBrowser which may already be running
   }
+
+  if (!versionHash) {
+    versionHash = 'mv1773949599';
+    logInfo('Using fallback version hash', { versionHash });
+  }
+
+  logInfo('McMaster session ready', { versionHash, contentVersion });
 }
 
 /**
@@ -132,11 +77,11 @@ function buildNavigationEvents(partNumber: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Endpoint: ProductOrderInfo.aspx (no auth required)
+// Endpoint: ProductOrderInfo.aspx (pricing, delivery, description)
 // ---------------------------------------------------------------------------
 
 async function fetchProductOrderInfo(partNumber: string): Promise<any> {
-  await ensureSession();
+  await ensureVersionHash();
 
   const params = new URLSearchParams({
     partNumber,
@@ -145,31 +90,143 @@ async function fetchProductOrderInfo(partNumber: string): Promise<any> {
   });
 
   const url = `${MCMASTER_BASE}/${versionHash}/WebParts/OrderServer/ProductOrderInfo.aspx?${params}`;
-  const response = await mcmasterFetch(url);
+  const response = await browserFetch(url, {
+    headers: { 'x-requested-with': 'XMLHttpRequest' },
+  });
 
-  if (!response.ok) {
+  if (response.status !== 200) {
     throw new Error(`ProductOrderInfo returned ${response.status}`);
   }
 
-  return await response.json();
+  return JSON.parse(response.body);
 }
 
 // ---------------------------------------------------------------------------
-// Endpoint: ItmPrsnttnWebPart.aspx (needs `cat` cookie)
+// DOM Extraction: Navigate to product page and extract specs from rendered HTML
 // ---------------------------------------------------------------------------
 
+async function extractSpecsFromDOM(partNumber: string): Promise<{
+  specs: Record<string, string>;
+  primaryHeader: string | null;
+  images: string[];
+  notFound: boolean;
+}> {
+  const navPage = await navigateTo(`${MCMASTER_BASE}/${partNumber}`);
+
+  try {
+    // Check for "No matches" page (invalid part number)
+    const bodyText = await navPage.evaluate(() => document.body?.innerText?.slice(0, 1000) || '');
+    if (bodyText.includes('No matches were found')) {
+      return { specs: {}, primaryHeader: null, images: [], notFound: true };
+    }
+
+    const data = await navPage.evaluate(() => {
+      const result: any = { specs: {}, primaryHeader: null, images: [] };
+
+      // Primary header (product name)
+      const h1 = document.querySelector('h1');
+      result.primaryHeader = h1?.textContent?.trim() || null;
+
+      // Specs table — extract label/value pairs from all tables
+      const tables = Array.from(document.querySelectorAll('table'));
+      for (const table of tables) {
+        const rows = Array.from(table.querySelectorAll('tr'));
+        for (const row of rows) {
+          const cells = Array.from(row.querySelectorAll('td, th'));
+          if (cells.length >= 2) {
+            const label = cells[0].textContent?.trim();
+            const value = cells[1].textContent?.trim();
+            if (label && value && label.length < 100 && value.length < 200) {
+              result.specs[label] = value;
+            }
+          }
+        }
+      }
+
+      // Images — only product-specific images (ImageCache), not site chrome
+      const imgEls = Array.from(document.querySelectorAll('img[src*="ImageCache"], img[src*="CAD"]'));
+      for (const img of imgEls) {
+        const src = (img as HTMLImageElement).src;
+        if (src && !result.images.includes(src) && !src.includes('BrowseCatalog') && !src.includes('CategoryTiles')) {
+          result.images.push(src);
+        }
+      }
+
+      return result;
+    });
+
+    return { ...data, notFound: false };
+  } finally {
+    await navPage.close().catch(() => {});
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Endpoint: ProductContent.aspx (CAD file paths)
+// ---------------------------------------------------------------------------
+
+async function fetchProductContent(partNumber: string): Promise<any | null> {
+  await ensureVersionHash();
+
+  const params = new URLSearchParams({
+    partNumber,
+    clientNavigationEvents: buildNavigationEvents(partNumber),
+    envrmgrcharsetind: '3',
+    features: 'enablerewriteetoeventchain,rtrvcadviarps',
+  });
+
+  const url = `${MCMASTER_BASE}/${versionHash}/WebParts/Content/ProductContent.aspx?${params}`;
+
+  try {
+    const response = await browserFetch(url, {
+      headers: {
+        'Accept': '*/*',
+        'Referer': `${MCMASTER_BASE}/${partNumber}`,
+        'x-requested-with': 'XMLHttpRequest',
+      },
+    });
+
+    if (response.status !== 200) return null;
+
+    const text = response.body;
+
+    // Try direct JSON parse
+    try {
+      return JSON.parse(text);
+    } catch {
+      // Fall through
+    }
+
+    // Try extracting JSON from HTML-wrapped response
+    const htmlStripped = text.replace(/<[^>]*>/g, '').trim();
+    try {
+      return JSON.parse(htmlStripped);
+    } catch {
+      // Fall through
+    }
+
+    // Try digit-prefix format (e.g. "0000019279{...json...}")
+    const parsed = parseDigitPrefixResponse(text) || parseDigitPrefixResponse(htmlStripped);
+    if (parsed) return parsed;
+
+    logInfo('fetchProductContent: could not parse response', {
+      bodyLength: text.length,
+      bodyPreview: text.slice(0, 200),
+    });
+    return null;
+  } catch (error) {
+    logError('ProductContent fetch failed', error);
+    return null;
+  }
+}
+
 /**
- * Parse the ItmPrsnttnWebPart response. The response body is:
- *   <digits><JSON blob><optional HTML>
- * e.g. "0000019279{...json...}<div ...>"
- * We strip leading digits, then extract the JSON object.
+ * Parse a response with digit prefix: "0000019279{...json...}<optional HTML>"
  */
-function parseItemPresentationResponse(raw: string): any | null {
-  // Strip leading digits
+function parseDigitPrefixResponse(raw: string): any | null {
   const stripped = raw.replace(/^\d+/, '');
   if (!stripped.startsWith('{')) return null;
 
-  // Find matching closing brace for the top-level JSON object
   let depth = 0;
   let inString = false;
   let escape = false;
@@ -177,26 +234,14 @@ function parseItemPresentationResponse(raw: string): any | null {
 
   for (let i = 0; i < stripped.length; i++) {
     const ch = stripped[i];
-    if (escape) {
-      escape = false;
-      continue;
-    }
-    if (ch === '\\' && inString) {
-      escape = true;
-      continue;
-    }
-    if (ch === '"') {
-      inString = !inString;
-      continue;
-    }
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
     if (inString) continue;
     if (ch === '{') depth++;
     else if (ch === '}') {
       depth--;
-      if (depth === 0) {
-        endIdx = i + 1;
-        break;
-      }
+      if (depth === 0) { endIdx = i + 1; break; }
     }
   }
 
@@ -209,203 +254,157 @@ function parseItemPresentationResponse(raw: string): any | null {
   }
 }
 
-/**
- * Extract structured specs from ReactData.TableEntries
- */
-function extractSpecs(tableEntries: any[]): Record<string, string> {
-  const specs: Record<string, string> = {};
-  if (!Array.isArray(tableEntries)) return specs;
-
-  for (const entry of tableEntries) {
-    if (entry.Name && entry.Value !== undefined && entry.Value !== null) {
-      specs[entry.Name] = String(entry.Value);
-    }
-  }
-  return specs;
-}
-
-/**
- * Fetch full item presentation data (specs, images, CAD info, descriptions).
- * Requires the `cat` cookie from browser session.
- */
-async function fetchItemPresentation(partNumber: string): Promise<any | null> {
-  if (!hasAuthCookie()) return null;
-  await ensureSession();
-
-  const params = new URLSearchParams({
-    partNumber,
-    clientNavigationEvents: buildNavigationEvents(partNumber),
-    features: 'enablerewriteetoeventchain',
-  });
-
-  const url = `${MCMASTER_BASE}/${versionHash}/WebParts/Content/ItmPrsnttnWebPart.aspx?${params}`;
-
-  try {
-    const response = await mcmasterFetch(url, {}, true);
-    if (!response.ok) return null;
-
-    const raw = await response.text();
-    const data = parseItemPresentationResponse(raw);
-    if (!data) return null;
-
-    const result: any = {};
-
-    // ReactData contains the richest structured data
-    const reactData = data.ReactData || data.reactData || data;
-
-    // Headers — primary and secondary product descriptions
-    if (reactData.Headers) {
-      result.primaryHeader = reactData.Headers.Primary || null;
-      result.secondaryHeader = reactData.Headers.Secondary || null;
-    }
-
-    // Table entries — structured specs (material, thickness, hardness, etc.)
-    if (reactData.TableEntries) {
-      result.specs = extractSpecs(reactData.TableEntries);
-    }
-
-    // Copies — product description text blocks
-    if (reactData.Copies) {
-      result.descriptions = Array.isArray(reactData.Copies)
-        ? reactData.Copies.map((c: any) => typeof c === 'string' ? c : c.Text || c.text || '').filter(Boolean)
-        : [];
-    }
-
-    // CAD download info
-    if (reactData.CadDownloadInfo || data.CadDownloadInfo) {
-      result.cadDownloadInfo = reactData.CadDownloadInfo || data.CadDownloadInfo;
-    }
-
-    // Images
-    if (reactData.ImageLayoutComponentDat || data.ImageLayoutComponentDat) {
-      const imgData = reactData.ImageLayoutComponentDat || data.ImageLayoutComponentDat;
-      result.images = extractImages(imgData);
-    }
-
-    return result;
-  } catch (error) {
-    logError('ItmPrsnttnWebPart fetch failed', error);
-    return null;
-  }
-}
-
-/**
- * Extract image URLs from ImageLayoutComponentDat
- */
-function extractImages(imgData: any): string[] {
-  if (!imgData) return [];
-  const urls: string[] = [];
-
-  // imgData may be an object with image entries or an array
-  const items = Array.isArray(imgData) ? imgData : [imgData];
-  for (const item of items) {
-    if (item.SourcePath) {
-      urls.push(`${MCMASTER_BASE}${item.SourcePath}`);
-    }
-    if (item.sourcePath) {
-      urls.push(`${MCMASTER_BASE}${item.sourcePath}`);
-    }
-    // Some responses nest images in an array
-    if (Array.isArray(item.Images)) {
-      for (const img of item.Images) {
-        if (img.SourcePath) urls.push(`${MCMASTER_BASE}${img.SourcePath}`);
-      }
-    }
-  }
-  return urls;
-}
-
 // ---------------------------------------------------------------------------
-// Endpoint: ProductContent.aspx (needs `cat` cookie)
+// Search — DOM scraping of McMaster search results page
 // ---------------------------------------------------------------------------
 
-async function fetchProductContent(partNumber: string): Promise<any | null> {
-  if (!hasAuthCookie()) return null;
-  await ensureSession();
-
-  const params = new URLSearchParams({
-    partNumber,
-    clientNavigationEvents: buildNavigationEvents(partNumber),
-    envrmgrcharsetind: '3',
-    features: 'enablerewriteetoeventchain,rtrvcadviarps',
-  });
-
-  const url = `${MCMASTER_BASE}/${versionHash}/WebParts/Content/ProductContent.aspx?${params}`;
-
-  try {
-    const response = await mcmasterFetch(url, {}, true);
-    if (!response.ok) return null;
-
-    const contentType = response.headers.get('content-type') || '';
-    if (contentType.includes('json')) {
-      return await response.json();
-    }
-
-    const text = await response.text();
-    try {
-      return JSON.parse(text);
-    } catch {
-      return null;
-    }
-  } catch (error) {
-    logError('ProductContent fetch failed', error);
-    return null;
-  }
+interface CategoryResult {
+  name: string;
+  description: string;
+  productCount?: number;
+  url?: string;
 }
-
-// ---------------------------------------------------------------------------
-// Search
-// ---------------------------------------------------------------------------
 
 async function searchMcMaster(query: string): Promise<any> {
-  await ensureSession();
   logOperation('mcmaster_search', 'started', { query });
 
-  const params = new URLSearchParams({
-    txtSearch: query,
-    selType: 'TxtSearch',
-  });
-
-  const searchUrl = `${MCMASTER_BASE}/${versionHash}/WebParts/CatalogServer/CatalogNavigation.aspx?${params}`;
-
   try {
-    const response = await mcmasterFetch(searchUrl);
-    const contentType = response.headers.get('content-type') || '';
+    const navPage = await navigateTo(`${MCMASTER_BASE}/${encodeURIComponent(query)}`);
 
-    if (contentType.includes('json')) {
-      const data = await response.json();
-      return { query, ...data };
+    try {
+      const data = await navPage.evaluate(() => {
+        const bodyText = document.body?.innerText || '';
+
+        // Extract total product count (e.g. "14,873 Products")
+        const totalMatch = bodyText.match(/([\d,]+)\s+Products?/);
+        const totalCount = totalMatch ? parseInt(totalMatch[1].replace(/,/g, ''), 10) : 0;
+
+        // Extract product categories with descriptions and counts
+        // McMaster renders categories as blocks: name, description, "N products"
+        const categories: Array<{
+          name: string;
+          description: string;
+          productCount?: number;
+          url?: string;
+        }> = [];
+
+        // Get all links — category links go to /products/ or subcategory pages
+        const links = Array.from(document.querySelectorAll('a[href]'));
+        const catLinks = links.filter(l => {
+          const href = (l as HTMLAnchorElement).getAttribute('href') || '';
+          // Category links have product counts or descriptive text nearby
+          const text = l.textContent?.trim() || '';
+          return text.length > 3 && text.length < 100 &&
+            !href.startsWith('/orders') && !href.startsWith('/contact') &&
+            !href.startsWith('/order-history') && href !== '/';
+        });
+
+        // Look for category blocks in the body text
+        // Pattern: category name, then description, then "N products"
+        const lines = bodyText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        const productCountPattern = /^([\d,]+)\s+products?$/i;
+
+        for (let i = 0; i < lines.length; i++) {
+          const countMatch = lines[i].match(productCountPattern);
+          if (!countMatch) continue;
+
+          const count = parseInt(countMatch[1].replace(/,/g, ''), 10);
+          // Look backwards for the category name and description
+          // Usually: name (i-2), description (i-1), "N products" (i)
+          let name = '';
+          let description = '';
+
+          if (i >= 2 && lines[i - 1].length > 10 && lines[i - 2].length > 3) {
+            name = lines[i - 2];
+            description = lines[i - 1];
+          } else if (i >= 1 && lines[i - 1].length > 3) {
+            name = lines[i - 1];
+          }
+
+          // Skip UI elements and the total count line
+          const skipNames = ['Print', 'Forward', 'Log in', 'ORDER', 'ORDER HISTORY', 'How can we improve?'];
+          if (name && !name.match(productCountPattern) && !skipNames.includes(name) && count !== totalCount) {
+            // Find URL for this category
+            const matchingLink = catLinks.find(l => l.textContent?.trim() === name);
+            const url = matchingLink ? (matchingLink as HTMLAnchorElement).href : undefined;
+
+            categories.push({ name, description, productCount: count, url });
+          }
+        }
+
+        // Extract available filter dimensions (so LLM knows what filtering is possible)
+        const filters: string[] = [];
+        const filterLabels = ['System of Measurement', 'Thread Size', 'Length', 'Material',
+          'Fastener Head Type', 'Threading', 'Finish', 'Drive Style', 'Thread Type',
+          'Thread Spacing', 'Thread Pitch', 'Tensile Strength', 'Inner Diameter',
+          'Outer Diameter', 'Width', 'Thickness', 'Shaft Diameter', 'OD', 'ID',
+          'Housing Type', 'Shaft Type', 'Load Capacity', 'Dynamic Load Capacity',
+          'Temperature', 'Pressure Rating', 'Bore Diameter'];
+        for (const label of filterLabels) {
+          if (bodyText.includes(label)) filters.push(label);
+        }
+
+        // Extract any part numbers that might be on the page (rare but possible for direct matches)
+        const partPattern = /\b(\d{3,6}[A-Z]\d{2,5})\b/g;
+        const partMatches = bodyText.match(partPattern);
+        const partNumbers = partMatches ? [...new Set(partMatches)] : [];
+
+        return { totalCount, categories, filters, partNumbers };
+      });
+
+      // If we found part numbers directly (specific search hit a product table)
+      if (data.partNumbers.length > 0) {
+        const enriched = [];
+        for (const pn of data.partNumbers.slice(0, 10)) {
+          try {
+            const orderInfo = await fetchProductOrderInfo(pn);
+            enriched.push({
+              partNumber: pn,
+              description: [orderInfo.parentDescription, orderInfo.suffixDescription].filter(Boolean).join(' — '),
+              price: orderInfo.pricingData?.price,
+            });
+          } catch {
+            enriched.push({ partNumber: pn, description: '' });
+          }
+        }
+        return {
+          query,
+          totalProducts: data.totalCount,
+          partNumbers: data.partNumbers,
+          products: enriched,
+          categories: data.categories.length > 0 ? data.categories : undefined,
+          availableFilters: data.filters,
+          note: `Found ${data.partNumbers.length} specific products. Use mcmaster_part_details for full specs, or mcmaster_download_cad to download a CAD file.`,
+        };
+      }
+
+      // Categories-only result (broad search)
+      if (data.categories.length > 0) {
+        return {
+          query,
+          totalProducts: data.totalCount,
+          categories: data.categories,
+          availableFilters: data.filters,
+          note: 'Search returned product categories. To find specific part numbers, try a more specific search (e.g. add material or size) or browse mcmaster.com directly. Use mcmaster_part_details if you already have a part number.',
+        };
+      }
+
+      return {
+        query,
+        totalProducts: data.totalCount,
+        availableFilters: data.filters,
+        note: 'No products or categories found. Try different search terms (e.g. "socket head cap screw" instead of "bolt"). Use mcmaster_part_details if you have a specific part number.',
+      };
+    } finally {
+      await navPage.close().catch(() => {});
     }
-
-    const html = await response.text();
-    const partNumbers = extractPartNumbers(html);
-
-    return {
-      query,
-      resultCount: partNumbers.length,
-      partNumbers,
-      note: partNumbers.length === 0
-        ? 'Search returned no parseable results. Try using a specific McMaster part number with mcmaster_part_details instead.'
-        : undefined,
-    };
   } catch (error) {
     return {
       query,
-      searchUrl: `${MCMASTER_BASE}/${encodeURIComponent(query)}`,
-      error: `Search endpoint failed: ${error}`,
+      error: `Search failed: ${error}`,
       suggestion: 'If you have a specific part number, use mcmaster_part_details instead.',
     };
   }
-}
-
-function extractPartNumbers(html: string): string[] {
-  const pattern = /\b(\d{3,6}[A-Z]\d{2,5})\b/g;
-  const partNumbers = new Set<string>();
-  let match;
-  while ((match = pattern.exec(html)) !== null) {
-    partNumbers.add(match[1]);
-  }
-  return Array.from(partNumbers);
 }
 
 // ---------------------------------------------------------------------------
@@ -432,16 +431,34 @@ function extractCadInfo(data: any): any | null {
 }
 
 // ---------------------------------------------------------------------------
-// Combined part details — merges all three endpoints
+// Combined part details — merges all data sources
 // ---------------------------------------------------------------------------
 
 async function getPartDetails(partNumber: string): Promise<any> {
   logOperation('mcmaster_part_details', 'started', { partNumber });
 
-  // Always fetch order info; conditionally fetch authenticated endpoints in parallel
-  const [orderInfo, itemPresentation, contentInfo] = await Promise.all([
+  const result = await _getPartDetailsOnce(partNumber);
+
+  // If we got pricing but no specs and no CAD, the session may be degraded.
+  // Reset the browser and try once more.
+  const hasCat = await hasBrowserCookie('cat').catch(() => false);
+  const hasContent = !!result.cadFiles || (result.specs && Object.keys(result.specs).length > 0);
+
+  if (!hasContent && !hasCat && result.description) {
+    logInfo('Session appears degraded (no cat cookie, no content). Resetting browser and retrying...', { partNumber });
+    await resetSession();
+    return _getPartDetailsOnce(partNumber);
+  }
+
+  return result;
+}
+
+async function _getPartDetailsOnce(partNumber: string): Promise<any> {
+  const domData = await extractSpecsFromDOM(partNumber).catch(() => ({ specs: {}, primaryHeader: null, images: [], notFound: false }));
+
+  // Now make API calls — the page is on mcmaster.com so fetch() works from this context
+  const [orderInfo, contentInfo] = await Promise.all([
     fetchProductOrderInfo(partNumber),
-    fetchItemPresentation(partNumber).catch(() => null),
     fetchProductContent(partNumber).catch(() => null),
   ]);
 
@@ -450,7 +467,7 @@ async function getPartDetails(partNumber: string): Promise<any> {
     url: `${MCMASTER_BASE}/${partNumber}`,
   };
 
-  // --- From ProductOrderInfo (always available) ---
+  // --- From ProductOrderInfo (pricing, delivery) ---
   result.description = orderInfo.parentDescription;
   result.suffixDescription = orderInfo.suffixDescription;
   result.unitOfMeasure = orderInfo.unitOfMeasure;
@@ -465,29 +482,22 @@ async function getPartDetails(partNumber: string): Promise<any> {
     result.warnings = orderInfo.productStatusDat.warningMessage;
   }
 
-  // --- From ItmPrsnttnWebPart (authenticated — richest data) ---
-  if (itemPresentation) {
-    if (itemPresentation.primaryHeader) {
-      result.primaryHeader = itemPresentation.primaryHeader;
-    }
-    if (itemPresentation.secondaryHeader) {
-      result.secondaryHeader = itemPresentation.secondaryHeader;
-    }
-    if (itemPresentation.specs && Object.keys(itemPresentation.specs).length > 0) {
-      result.specs = itemPresentation.specs;
-    }
-    if (itemPresentation.descriptions && itemPresentation.descriptions.length > 0) {
-      result.productDescriptions = itemPresentation.descriptions;
-    }
-    if (itemPresentation.images && itemPresentation.images.length > 0) {
-      result.imageUrls = itemPresentation.images;
-    }
-    if (itemPresentation.cadDownloadInfo) {
-      result.cadDownloadInfo = itemPresentation.cadDownloadInfo;
-    }
+  // --- From DOM extraction (specs, images, header) ---
+  if (domData.primaryHeader) {
+    result.primaryHeader = domData.primaryHeader;
+  }
+  if (Object.keys(domData.specs).length > 0) {
+    result.specs = domData.specs;
+  }
+  if (domData.images.length > 0) {
+    result.imageUrls = domData.images;
   }
 
-  // --- From ProductContent (authenticated — CAD file paths) ---
+  if (domData.notFound) {
+    result.warning = `Part number "${partNumber}" was not found on McMaster-Carr. This may be a catalog/category page number, not an individual product number.`;
+  }
+
+  // --- From ProductContent (CAD file paths) ---
   const cadInfo = extractCadInfo(contentInfo) || extractCadInfo(orderInfo);
   if (cadInfo) {
     result.cadFiles = cadInfo;
@@ -501,40 +511,25 @@ async function getPartDetails(partNumber: string): Promise<any> {
     }
   }
 
-  // Tell the user if authenticated data wasn't available
-  if (!hasAuthCookie()) {
-    result.note = 'Set browser cookies via mcmaster_set_cookies to get full specs, images, and CAD file paths.';
+  // Detect catalog/category pages: they return specs but no pricing or description
+  if (!domData.notFound && !result.description && !result.price) {
+    result.warning = `Part number "${partNumber}" appears to be a catalog or category page, not an individual product. No pricing or description available.`;
   }
+
+  // Attach diagnostics for internal use by downloadCad error reporting
+  const hasCat = await hasBrowserCookie('cat').catch(() => false);
+  result._diagnostics = {
+    orderInfoOk: !!orderInfo,
+    specsFromDOM: Object.keys(domData.specs).length,
+    contentOk: !!contentInfo,
+    hasCatCookie: hasCat,
+    versionHash,
+    hasCadFiles: !!result.cadFiles,
+  };
+
+  logInfo('Part details diagnostics', result._diagnostics);
 
   return result;
-}
-
-// ---------------------------------------------------------------------------
-// Set browser cookies
-// ---------------------------------------------------------------------------
-
-function setBrowserCookies(cookieString: string, features?: string): void {
-  sessionCookies = cookieString.split(';').map(c => c.trim()).filter(Boolean);
-
-  const volverMatch = sessionCookies.find(c => c.startsWith('volver='));
-  if (volverMatch) {
-    versionHash = volverMatch.split('=')[1];
-  }
-  const stbverMatch = sessionCookies.find(c => c.startsWith('stbver='));
-  if (stbverMatch) {
-    contentVersion = stbverMatch.split('=')[1];
-  }
-  if (features) {
-    mcmFeatures = features;
-  }
-
-  logInfo('Browser cookies set', {
-    count: sessionCookies.length,
-    versionHash,
-    contentVersion,
-    hasAuthCookie: hasAuthCookie(),
-    hasMcmFeatures: !!mcmFeatures,
-  });
 }
 
 // ---------------------------------------------------------------------------
@@ -546,12 +541,8 @@ async function downloadCad(
   format: string,
   destinationPath: string,
   cadFilePath?: string,
-  browserCookies?: string,
 ): Promise<any> {
-  if (browserCookies) {
-    setBrowserCookies(browserCookies);
-  }
-  await ensureSession();
+  await ensureVersionHash();
   logOperation('mcmaster_download_cad', 'started', { partNumber, format, destinationPath });
 
   let cadUrl: string;
@@ -565,8 +556,9 @@ async function downloadCad(
       return {
         success: false,
         partNumber,
-        error: 'No CAD file paths available. McMaster CAD paths require browser-level session cookies.',
-        suggestion: 'Use mcmaster_set_cookies to provide your browser cookies, or provide the cadFilePath directly if you have it.',
+        error: 'No CAD file paths available.',
+        diagnostics: details._diagnostics,
+        suggestion: 'CAD files may not be available for this part, or the ProductContent endpoint returned no data. Try calling mcmaster_part_details first to check.',
         url: details.url,
       };
     }
@@ -595,15 +587,33 @@ async function downloadCad(
   }
 
   try {
-    const response = await mcmasterFetch(cadUrl, {}, true);
+    let response = await browserFetch(cadUrl, {
+      headers: {
+        'Accept': 'application/octet-stream, */*',
+        'Referer': `${MCMASTER_BASE}/${partNumber}`,
+      },
+      binary: true,
+    });
 
-    if (!response.ok) {
+    // Retry once on 403 (Akamai rate limiting)
+    if (response.status === 403) {
+      await new Promise(r => setTimeout(r, 2000));
+      response = await browserFetch(cadUrl, {
+        headers: {
+          'Accept': 'application/octet-stream, */*',
+          'Referer': `${MCMASTER_BASE}/${partNumber}`,
+        },
+        binary: true,
+      });
+    }
+
+    if (response.status !== 200) {
       return {
         success: false,
         partNumber,
-        error: `Download returned status ${response.status}. CAD downloads require browser-level session cookies.`,
+        error: `Download returned status ${response.status}`,
+        statusText: response.statusText,
         cadUrl,
-        suggestion: 'Use mcmaster_set_cookies with your browser cookies first, then retry the download.',
       };
     }
 
@@ -612,7 +622,22 @@ async function downloadCad(
       fs.mkdirSync(dir, { recursive: true });
     }
 
-    const buffer = Buffer.from(await response.arrayBuffer());
+    const buffer = Buffer.from(response.body, 'base64');
+
+    // Validate that we got actual CAD data, not an HTML error page
+    const headerStr = buffer.slice(0, 50).toString('utf-8');
+    const headerLower = headerStr.toLowerCase();
+    if (headerLower.includes('<!doctype') || headerLower.includes('<html')) {
+      return {
+        success: false,
+        partNumber,
+        error: 'Download returned HTML instead of CAD data — session may be expired',
+        bodyPreview: buffer.slice(0, 200).toString('utf-8'),
+        cadUrl,
+        suggestion: 'Try the request again. The browser session may have expired.',
+      };
+    }
+
     fs.writeFileSync(destinationPath, buffer);
 
     return {
@@ -640,13 +665,8 @@ async function addToPdm(
   partNumber: string,
   vaultLocalPath: string,
   format: string,
-  browserCookies?: string,
   customProperties?: Record<string, string>,
 ): Promise<any> {
-  if (browserCookies) {
-    setBrowserCookies(browserCookies);
-  }
-
   logOperation('mcmaster_add_to_pdm', 'started', { partNumber, vaultLocalPath, format });
 
   // Step 1: Get full part details (metadata)
@@ -684,7 +704,7 @@ async function addToPdm(
     'Supplier URL': details.url,
   };
 
-  // Add specs from ItmPrsnttnWebPart if available
+  // Add specs from DOM extraction if available
   if (details.specs) {
     for (const [name, value] of Object.entries(details.specs)) {
       props[name] = String(value);
@@ -781,31 +801,10 @@ async function addToPdm(
 
 export const mcmasterTools = [
   {
-    name: 'mcmaster_set_cookies',
-    description: 'Set browser cookies for McMaster-Carr authenticated operations (needed for full specs, images, and CAD downloads). Copy cookies from browser DevTools: Application > Cookies > mcmaster.com. The `cat` cookie is required for authenticated endpoints.',
-    inputSchema: z.object({
-      cookies: z.string().describe('Cookie string from browser (e.g. "bid=123; volver=mv123; stbver=mvC; cat=5_123_abc")'),
-      features: z.string().optional().describe('x-mcm-features header value from browser network tab (optional, improves compatibility)'),
-    }),
-    handler: async (args: any) => {
-      setBrowserCookies(args.cookies, args.features);
-      return {
-        success: true,
-        message: 'Browser cookies set.' + (hasAuthCookie()
-          ? ' Authenticated endpoints (full specs, CAD downloads) are now available.'
-          : ' WARNING: No `cat` cookie found — authenticated endpoints will not work. Make sure to include the `cat` cookie.'),
-        versionHash,
-        contentVersion,
-        cookieCount: sessionCookies.length,
-        hasAuthCookie: hasAuthCookie(),
-      };
-    },
-  },
-  {
     name: 'mcmaster_search',
-    description: 'Search McMaster-Carr catalog for parts by keyword or category (e.g. "socket head cap screw", "stainless steel rod")',
+    description: `Search McMaster-Carr catalog by keyword. Returns matching products with part numbers, descriptions, and prices when the search is specific (e.g. "linear ball bearing 12mm"), or product categories with counts when the search is broad (e.g. "bearing"). Works on any platform — no SolidWorks needed. The first call launches a headless Chrome browser and may take 15-30 seconds; subsequent calls reuse the session. Use mcmaster_part_details to get full specs for a specific part number.`,
     inputSchema: z.object({
-      query: z.string().describe('Search query - keywords, part description, or category name'),
+      query: z.string().describe('Search keywords — e.g. "linear ball bearing 12mm", "M4 socket head cap screw", "O-ring". More specific queries return individual products with part numbers; broad queries return categories.'),
     }),
     handler: async (args: any) => {
       try {
@@ -821,9 +820,9 @@ export const mcmasterTools = [
   },
   {
     name: 'mcmaster_part_details',
-    description: 'Get full details for a McMaster-Carr part number. Without cookies: returns description, pricing, and delivery. With cookies (via mcmaster_set_cookies): also returns full specs table (material, dimensions, hardness, compliance, etc.), product descriptions, images, and CAD file paths.',
+    description: `Get full details for a specific McMaster-Carr part number: description, pricing tiers, delivery estimate, full specs table (material, dimensions, tolerances, compliance), available CAD file formats with download paths, and product images. Works on any platform — no SolidWorks needed. The part number format is digits + letter + digits (e.g. "91251A129"). Call mcmaster_search first if you don't have a part number. Returns cadFiles field with available 2D/3D formats — pass a cadFilePath to mcmaster_download_cad to skip redundant lookups.`,
     inputSchema: z.object({
-      partNumber: z.string().describe('McMaster-Carr part number (e.g. "91251A129", "94355A211")'),
+      partNumber: z.string().describe('McMaster-Carr part number — must be a specific product number like "91251A129", not a category name'),
     }),
     handler: async (args: any) => {
       try {
@@ -840,17 +839,16 @@ export const mcmasterTools = [
   },
   {
     name: 'mcmaster_download_cad',
-    description: 'Download a CAD file for a McMaster-Carr part. Supports STEP, IGES, Solidworks (SLDPRT/SLDDRW), DWG, DXF, Parasolid, SAT, and PDF. Requires browser cookies (use mcmaster_set_cookies first) or a direct cadFilePath.',
+    description: `Download a CAD file for a McMaster-Carr part to a local path. Works on any platform — no SolidWorks needed. Supports STEP, IGES, Solidworks (SLDPRT/SLDDRW), DWG, DXF, Parasolid, SAT, and PDF. Not all parts have CAD files — fasteners and mechanical parts usually do, but consumables typically don't. Tip: call mcmaster_part_details first and pass the cadFilePath from cadFiles to skip a redundant product lookup.`,
     inputSchema: z.object({
-      partNumber: z.string().describe('McMaster-Carr part number'),
+      partNumber: z.string().describe('McMaster-Carr part number (e.g. "91251A129")'),
       format: z.string().default('STEP').describe('CAD format: STEP, IGES, Solidworks, SLDPRT, SLDDRW, DWG, DXF, Parasolid, SAT, or PDF'),
-      destinationPath: z.string().describe('Local file path to save the downloaded CAD file'),
-      cadFilePath: z.string().optional().describe('Direct CAD file path from a previous mcmaster_part_details response (e.g. "/mvC/Library/CAD2/...")'),
-      browserCookies: z.string().optional().describe('Browser cookie string (alternative to using mcmaster_set_cookies first)'),
+      destinationPath: z.string().describe('Full local file path to save the CAD file (e.g. "/Users/me/Downloads/91251A129.step"). Parent directories are created automatically.'),
+      cadFilePath: z.string().optional().describe('Optional: direct CAD file path from a previous mcmaster_part_details cadFiles response — skips a redundant lookup'),
     }),
     handler: async (args: any) => {
       try {
-        return await downloadCad(args.partNumber, args.format, args.destinationPath, args.cadFilePath, args.browserCookies);
+        return await downloadCad(args.partNumber, args.format, args.destinationPath, args.cadFilePath);
       } catch (error) {
         logError('McMaster CAD download failed', error);
         return {
@@ -862,17 +860,16 @@ export const mcmasterTools = [
   },
   {
     name: 'mcmaster_add_to_pdm',
-    description: 'Full workflow: download a McMaster-Carr CAD file, stamp it with part metadata (description, material, price, specs) as SolidWorks custom properties, and generate VBA macros to add it to your PDM vault. Requires browser cookies for CAD download.',
+    description: 'Full workflow: download a McMaster-Carr CAD file, stamp it with part metadata (description, material, price, specs) as SolidWorks custom properties, and generate VBA macros to add it to your PDM vault. The download step works on any platform. The generated VBA macros must be run on Windows with SolidWorks to set properties and check into PDM.',
     inputSchema: z.object({
       partNumber: z.string().describe('McMaster-Carr part number (e.g. "91251A129")'),
       vaultLocalPath: z.string().describe('Local path to your PDM vault working folder (e.g. "C:\\\\PDMVault\\\\Purchased Parts")'),
       format: z.string().default('STEP').describe('CAD format: STEP, IGES, Solidworks, SLDPRT, SLDDRW, DWG, DXF'),
-      browserCookies: z.string().optional().describe('Browser cookie string (alternative to using mcmaster_set_cookies first)'),
       customProperties: z.record(z.string()).optional().describe('Additional custom properties to set on the file (e.g. {"Project": "Widget-2024", "Buyer": "J.Smith"})'),
     }),
     handler: async (args: any) => {
       try {
-        return await addToPdm(args.partNumber, args.vaultLocalPath, args.format, args.browserCookies, args.customProperties);
+        return await addToPdm(args.partNumber, args.vaultLocalPath, args.format, args.customProperties);
       } catch (error) {
         logError('McMaster add-to-PDM failed', error);
         return {

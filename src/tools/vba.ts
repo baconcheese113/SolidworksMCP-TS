@@ -79,7 +79,7 @@ const compileTemplate = (templateName: string): any => {
 const originalVBATools = [
   {
     name: 'generate_vba_script',
-    description: 'Generate a VBA script from a template with parameters',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce a VBA macro from a named template with parameters. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       template: z.string().describe('Template name (e.g., "batch_export", "create_drawing", "modify_dimensions")'),
       parameters: z.record(z.any()).describe('Parameters to pass to the template'),
@@ -105,7 +105,7 @@ const originalVBATools = [
   
   {
     name: 'create_feature_vba',
-    description: 'Generate VBA code to create a specific feature',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to create features like bosses, cuts, fillets, chamfers, holes, and shells. For live feature creation, use create_extrusion instead. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       featureType: z.enum(['extrude', 'revolve', 'sweep', 'loft', 'hole', 'fillet', 'chamfer']),
       parameters: z.object({
@@ -167,7 +167,7 @@ End Sub`,
 
   {
     name: 'create_batch_vba',
-    description: 'Generate VBA for batch processing multiple files',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to iterate over multiple SolidWorks files and perform operations (export, update properties, rebuild). Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       operation: z.enum(['export', 'update_property', 'rebuild', 'print']),
       filePattern: z.string().describe('File pattern to match (e.g., "*.sldprt")'),
@@ -194,7 +194,7 @@ End Sub`,
 
   {
     name: 'run_vba_macro',
-    description: 'Execute a VBA macro in SolidWorks',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Runs a VBA macro string directly in the active SolidWorks session via the COM API.',
     inputSchema: z.object({
       macroPath: z.string().describe('Full path to the macro file (.swp or .swb)'),
       moduleName: z.string().default('Module1').describe('Module name containing the procedure'),
@@ -218,7 +218,7 @@ End Sub`,
   
   {
     name: 'create_drawing_vba',
-    description: 'Generate VBA to create drawings from 3D models',
+    description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to create a drawing document with standard views from a 3D model. For live drawing creation, use create_drawing_from_model + add_drawing_view instead. Requires Windows + SolidWorks to run the generated macro.',
     inputSchema: z.object({
       modelPath: z.string().describe('Path to the 3D model'),
       template: z.string().describe('Drawing template path'),

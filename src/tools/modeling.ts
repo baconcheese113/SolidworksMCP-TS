@@ -4,7 +4,7 @@ import { SolidWorksAPI } from '../solidworks/api.js';
 export const modelingTools = [
   {
     name: 'open_model',
-    description: 'Open a SolidWorks part, assembly, or drawing file',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Open a .sldprt, .sldasm, or .slddrw file in the running SolidWorks instance. The file must exist on the local filesystem.',
     inputSchema: z.object({
       path: z.string().describe('Full path to the SolidWorks file'),
     }),
@@ -20,7 +20,7 @@ export const modelingTools = [
   
   {
     name: 'create_part',
-    description: 'Create a new SolidWorks part document',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Create a new empty part document (.sldprt). This is typically the first step before create_sketch.',
     inputSchema: z.object({}),
     handler: (args: any, swApi: SolidWorksAPI) => {
       try {
@@ -34,7 +34,7 @@ export const modelingTools = [
   
   {
     name: 'close_model',
-    description: 'Close the current model with option to save',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Close the active document, optionally saving first.',
     inputSchema: z.object({
       save: z.boolean().default(false).describe('Save before closing'),
     }),
@@ -69,7 +69,7 @@ export const modelingTools = [
   
   {
     name: 'create_extrusion',
-    description: 'Create an extrusion feature',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Create a boss-extrude or cut-extrude from the most recent sketch. You must create and close a sketch first (create_sketch → sketch geometry → exit_sketch → create_extrusion). For complex extrusions with many parameters, use create_feature_vba to generate VBA code instead.',
     inputSchema: z.object({
       depth: z.number().describe('Extrusion depth in mm'),
       draft: z.number().default(0).describe('Draft angle in degrees'),
@@ -87,7 +87,7 @@ export const modelingTools = [
   
   {
     name: 'get_dimension',
-    description: 'Get the value of a dimension',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Read a named dimension value (e.g. "D1@Sketch1") from the active model. Use get_feature_tree to discover dimension names.',
     inputSchema: z.object({
       name: z.string().describe('Dimension name (e.g., "D1@Sketch1")'),
     }),
@@ -103,7 +103,7 @@ export const modelingTools = [
   
   {
     name: 'set_dimension',
-    description: 'Set the value of a dimension',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Change a named dimension value in the active model. Call rebuild_model afterward to update geometry.',
     inputSchema: z.object({
       name: z.string().describe('Dimension name (e.g., "D1@Sketch1")'),
       value: z.number().describe('New value in mm'),
@@ -120,7 +120,7 @@ export const modelingTools = [
   
   {
     name: 'rebuild_model',
-    description: 'Rebuild the current model',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Force a rebuild of the active model to update all features after dimension or property changes.',
     inputSchema: z.object({
       force: z.boolean().default(false).describe('Force rebuild even if not needed'),
     }),

@@ -4,7 +4,7 @@ import { SolidWorksAPI } from '../solidworks/api.js';
 export const analysisTools = [
   {
     name: 'get_mass_properties',
-    description: 'Get mass properties of the current model',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Return mass, volume, surface area, center of mass, and moments of inertia for the active part or assembly.',
     inputSchema: z.object({
       units: z.enum(['kg', 'g', 'lb']).default('kg').describe('Mass units'),
     }),
@@ -41,7 +41,7 @@ export const analysisTools = [
   
   {
     name: 'check_interference',
-    description: 'Check for interference between components in an assembly',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Detect collisions between components in the active assembly. Only works on assemblies, not parts.',
     inputSchema: z.object({
       treatCoincidenceAsInterference: z.boolean().default(false),
       treatSubAssembliesAsComponents: z.boolean().default(false),
@@ -76,7 +76,7 @@ export const analysisTools = [
   
   {
     name: 'measure_distance',
-    description: 'Measure distance between two selected entities',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Measure the minimum distance between two selected faces, edges, or vertices.',
     inputSchema: z.object({
       entity1: z.string().describe('Name or reference of first entity'),
       entity2: z.string().describe('Name or reference of second entity'),
@@ -89,7 +89,7 @@ export const analysisTools = [
   
   {
     name: 'analyze_draft',
-    description: 'Analyze draft angles for molding',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Analyze faces for adequate draft angle relative to a pull direction. Used for injection molding design validation.',
     inputSchema: z.object({
       pullDirection: z.enum(['x', 'y', 'z', '-x', '-y', '-z']).describe('Pull direction'),
       requiredAngle: z.number().default(1).describe('Required draft angle in degrees'),
@@ -113,7 +113,7 @@ export const analysisTools = [
   
   {
     name: 'check_geometry',
-    description: 'Check model geometry for errors',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Scan the active model for invalid geometry, short edges, or missing faces.',
     inputSchema: z.object({
       checkType: z.enum(['all', 'faces', 'edges', 'vertices']).default('all'),
     }),
@@ -177,7 +177,7 @@ export const analysisTools = [
   
   {
     name: 'get_bounding_box',
-    description: 'Get the bounding box dimensions of the model',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Return the axis-aligned bounding box (length × width × height) of the active model.',
     inputSchema: z.object({}),
     handler: (args: any, swApi: SolidWorksAPI) => {
       try {
