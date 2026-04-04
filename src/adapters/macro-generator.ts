@@ -1,19 +1,13 @@
 /**
  * Macro Generator for SolidWorks VBA Operations
- * 
+ *
  * Generates VBA macros dynamically to handle complex operations
  * that exceed winax COM parameter limitations.
  */
 
-import { 
-  ExtrusionParameters, 
-  RevolveParameters, 
-  SweepParameters, 
-  LoftParameters 
-} from './types.js';
+import type { ExtrusionParameters, LoftParameters, RevolveParameters, SweepParameters } from './types.js';
 
 export class MacroGenerator {
-  
   /**
    * Generate VBA macro for complex extrusion with all parameters
    */
@@ -24,22 +18,20 @@ export class MacroGenerator {
     const bothDirections = params.bothDirections ? 'True' : 'False';
     const merge = params.merge !== false ? 'True' : 'False';
     const flipSideToCut = params.flipSideToCut ? 'True' : 'False';
-    
+
     // End conditions mapping
     const endConditionMap: { [key: string]: number } = {
-      'Blind': 0,
-      'ThroughAll': 1,
-      'UpToNext': 2,
-      'UpToVertex': 3,
-      'UpToSurface': 4,
-      'OffsetFromSurface': 5,
-      'MidPlane': 6
+      Blind: 0,
+      ThroughAll: 1,
+      UpToNext: 2,
+      UpToVertex: 3,
+      UpToSurface: 4,
+      OffsetFromSurface: 5,
+      MidPlane: 6,
     };
-    
-    const endCondition = params.endCondition 
-      ? endConditionMap[params.endCondition] || 0 
-      : 0;
-    
+
+    const endCondition = params.endCondition ? endConditionMap[params.endCondition] || 0 : 0;
+
     return `
 Option Explicit
 
@@ -58,7 +50,7 @@ Sub CreateExtrusion()
     Set swModel = swApp.ActiveDoc
 
     If swModel Is Nothing Then
-        MsgBox "ERROR: No active document", vbCritical, "Extrusion Macro"
+        Debug.Print "ERROR: No active document"
         Exit Sub
     End If
 
@@ -132,7 +124,7 @@ Sub CreateExtrusion()
         False, _ ' Draft while extruding 2
         ${params.draftOutward ? 'True' : 'False'}, _ ' Draft outward 1
         False, _ ' Draft outward 2
-        ${draft * Math.PI / 180}, _ ' Draft angle 1 (radians)
+        ${(draft * Math.PI) / 180}, _ ' Draft angle 1 (radians)
         0, _ ' Draft angle 2
         ${params.offsetReverse ? 'True' : 'False'}, _ ' Offset reverse 1
         False, _ ' Offset reverse 2
@@ -147,13 +139,17 @@ Sub CreateExtrusion()
     )
     
     ' Handle thin feature if specified
-    ${params.thinFeature ? `
+    ${
+      params.thinFeature
+        ? `
     If Not swFeature Is Nothing Then
         swFeature.SetThinWallType ${params.thinType === 'TwoSide' ? 1 : params.thinType === 'MidPlane' ? 2 : 0}, _
             ${(params.thinThickness || 1) / 1000}, 0, ${params.capEnds ? 'True' : 'False'}, _
             ${(params.capThickness || 1) / 1000}
     End If
-    ` : ''}
+    `
+        : ''
+    }
     
     ' Clear selections
     swModel.ClearSelection2 True
@@ -163,18 +159,17 @@ Sub CreateExtrusion()
 
     ' Check if feature was created successfully
     If swFeature Is Nothing Then
-        MsgBox "ERROR: Extrusion feature was not created. Check that a valid sketch is selected.", vbCritical, "Extrusion Macro"
+        Debug.Print "ERROR: Extrusion feature was not created. Check that a valid sketch is selected."
         Exit Sub
     End If
 
-    MsgBox "Extrusion created successfully: " & swFeature.Name, vbInformation, "Extrusion Macro"
+    Debug.Print "Extrusion created successfully: " & swFeature.Name
     Exit Sub
 
 ErrorHandler:
     If errorMsg = "" Then
         errorMsg = "Unexpected error: " & Err.Description & " (Error " & Err.Number & ")"
     End If
-    MsgBox errorMsg, vbCritical, "Extrusion Macro Error"
     Debug.Print errorMsg
 End Sub
 
@@ -187,7 +182,7 @@ Function Min(a As Long, b As Long) As Long
 End Function
 `;
   }
-  
+
   /**
    * Generate VBA macro for revolve feature
    */
@@ -195,7 +190,7 @@ End Function
     const angle = (params.angle * Math.PI) / 180; // Convert to radians
     const direction = params.direction === 'Reverse' ? 1 : params.direction === 'Both' ? 2 : 0;
     const merge = params.merge !== false ? 'True' : 'False';
-    
+
     return `
 Option Explicit
 
@@ -213,7 +208,7 @@ Sub CreateRevolve()
     Set swModel = swApp.ActiveDoc
 
     If swModel Is Nothing Then
-        MsgBox "ERROR: No active document", vbCritical, "Revolve Macro"
+        Debug.Print "ERROR: No active document"
         Exit Sub
     End If
 
@@ -239,13 +234,16 @@ Sub CreateRevolve()
     End If
     
     ' Select axis if specified
-    ${params.axis ? `
+    ${
+      params.axis
+        ? `
     boolStatus = swModel.Extension.SelectByID2("${params.axis}", "AXIS", 0, 0, 0, True, 16, Nothing, 0)
     If Not boolStatus Then
         ' Try to select a default axis
         boolStatus = swModel.Extension.SelectByID2("Line1", "SKETCHSEGMENT", 0, 0, 0, True, 16, Nothing, 0)
     End If
-    ` : `
+    `
+        : `
     ' Auto-select centerline or first line as axis
     Dim swSketch As Object
     Set swSketch = swModel.SketchManager.ActiveSketch
@@ -258,7 +256,8 @@ Sub CreateRevolve()
             swLine.Select4 True, Nothing
         End If
     End If
-    `}
+    `
+    }
     
     ' Create revolve feature
     Set swFeature = swFeatureMgr.FeatureRevolve2( _
@@ -282,18 +281,18 @@ Sub CreateRevolve()
 
     ' Check if feature was created successfully
     If swFeature Is Nothing Then
-        MsgBox "ERROR: Revolve feature was not created. Check sketch and axis selection.", vbCritical, "Revolve Macro"
+        Debug.Print "ERROR: Revolve feature was not created. Check sketch and axis selection."
         Exit Sub
     End If
 
-    MsgBox "Revolve created successfully: " & swFeature.Name, vbInformation, "Revolve Macro"
+    Debug.Print "Revolve created successfully: " & swFeature.Name
     Exit Sub
 
 ErrorHandler:
     If errorMsg = "" Then
         errorMsg = "Unexpected error: " & Err.Description & " (Error " & Err.Number & ")"
     End If
-    MsgBox errorMsg, vbCritical, "Revolve Macro Error"
+    Debug.Print "Revolve error: " & errorMsg
     Debug.Print errorMsg
 End Sub
 
@@ -330,15 +329,14 @@ Function SelectLatestSketch(swModel As Object) As Boolean
 End Function
 `;
   }
-  
-  
+
   /**
    * Generate VBA macro for sweep feature
    */
   generateSweepMacro(params: SweepParameters): string {
     const merge = params.merge !== false ? 'True' : 'False';
     const twistAngle = params.twistAngle ? (params.twistAngle * Math.PI) / 180 : 0;
-    
+
     return `
 Option Explicit
 
@@ -353,7 +351,7 @@ Sub CreateSweep()
     Set swModel = swApp.ActiveDoc
     
     If swModel Is Nothing Then
-        MsgBox "No active document"
+        Debug.Print "No active document"
         Exit Sub
     End If
     
@@ -403,24 +401,32 @@ Sub CreateSweep()
 End Sub
 `;
   }
-  
+
   /**
    * Generate VBA macro for loft feature
    */
   generateLoftMacro(params: LoftParameters): string {
-    const merge = params.merge !== false ? 'True' : 'False';
+    const _merge = params.merge !== false ? 'True' : 'False';
     const close = params.close ? 'True' : 'False';
-    
+
     // Build profile selection code
-    const profileSelections = params.profiles.map((profile, index) => 
-      `boolStatus = swModel.Extension.SelectByID2("${profile}", "SKETCH", 0, 0, 0, ${index > 0 ? 'True' : 'False'}, 1, Nothing, 0)`
-    ).join('\n    ');
-    
+    const profileSelections = params.profiles
+      .map(
+        (profile, index) =>
+          `boolStatus = swModel.Extension.SelectByID2("${profile}", "SKETCH", 0, 0, 0, ${index > 0 ? 'True' : 'False'}, 1, Nothing, 0)`
+      )
+      .join('\n    ');
+
     // Build guide curve selection code if any
-    const guideSelections = params.guideCurves ? params.guideCurves.map((guide, index) => 
-      `boolStatus = swModel.Extension.SelectByID2("${guide}", "SKETCH", 0, 0, 0, True, 2, Nothing, 0)`
-    ).join('\n    ') : '';
-    
+    const guideSelections = params.guideCurves
+      ? params.guideCurves
+          .map(
+            (guide, _index) =>
+              `boolStatus = swModel.Extension.SelectByID2("${guide}", "SKETCH", 0, 0, 0, True, 2, Nothing, 0)`
+          )
+          .join('\n    ')
+      : '';
+
     return `
 Option Explicit
 
@@ -435,7 +441,7 @@ Sub CreateLoft()
     Set swModel = swApp.ActiveDoc
     
     If swModel Is Nothing Then
-        MsgBox "No active document"
+        Debug.Print "No active document"
         Exit Sub
     End If
     
@@ -479,19 +485,21 @@ Sub CreateLoft()
 End Sub
 `;
   }
-  
+
   /**
    * Generate a generic VBA macro for any SolidWorks operation
    */
   generateGenericMacro(methodName: string, parameters: any[]): string {
     // Convert parameters to VBA format
-    const paramList = parameters.map(p => {
-      if (typeof p === 'string') return `"${p}"`;
-      if (typeof p === 'boolean') return p ? 'True' : 'False';
-      if (typeof p === 'number') return p.toString();
-      if (p === null || p === undefined) return 'Nothing';
-      return JSON.stringify(p);
-    }).join(', ');
+    const paramList = parameters
+      .map((p) => {
+        if (typeof p === 'string') return `"${p}"`;
+        if (typeof p === 'boolean') return p ? 'True' : 'False';
+        if (typeof p === 'number') return p.toString();
+        if (p === null || p === undefined) return 'Nothing';
+        return JSON.stringify(p);
+      })
+      .join(', ');
 
     return `
 Option Explicit
@@ -508,7 +516,7 @@ Sub Execute${methodName}()
     Set swModel = swApp.ActiveDoc
 
     If swModel Is Nothing Then
-        MsgBox "ERROR: No active document", vbCritical, "Macro Execution"
+        Debug.Print "ERROR: No active document"
         Exit Sub
     End If
 
@@ -520,16 +528,16 @@ Sub Execute${methodName}()
 
     ' Check result
     If IsEmpty(result) Or result = False Or result Is Nothing Then
-        MsgBox "WARNING: Method ${methodName} returned no result or failed", vbExclamation, "Macro Execution"
+        Debug.Print "WARNING: Method ${methodName} returned no result or failed"
     Else
-        MsgBox "Method ${methodName} executed successfully", vbInformation, "Macro Execution"
+        Debug.Print "Method ${methodName} executed successfully"
     End If
 
     Exit Sub
 
 ErrorHandler:
     errorMsg = "ERROR executing ${methodName}: " & Err.Description & " (Error " & Err.Number & ")"
-    MsgBox errorMsg, vbCritical, "Macro Execution Error"
+    Debug.Print "Macro error: " & errorMsg
     Debug.Print errorMsg
 End Sub
 `;

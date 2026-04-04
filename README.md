@@ -7,11 +7,36 @@
 [![Node.js](https://img.shields.io/badge/Node.js-20+-green?logo=node.js)](https://nodejs.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![SolidWorks](https://img.shields.io/badge/SolidWorks-2021--2025-red)](https://www.solidworks.com/)
+[![Windows](https://img.shields.io/badge/Windows-10%2F11-blue?logo=windows)](https://www.microsoft.com/windows)
 
 An MCP server that lets AI assistants (Claude, etc.) drive SolidWorks through its COM API.
 90+ tools for modeling, sketching, drawing, export, analysis, VBA generation, and McMaster-Carr part sourcing.
 
-</div>
+## How It Works
+
+```
+Claude / MCP Client
+       |
+   MCP Protocol (stdio JSON-RPC)
+       |
+   Tool Handlers (src/tools/*.ts)
+       |
+   Feature Complexity Analyzer --- routes by param count
+       |                    |
+   Direct COM (winax)    VBA Macro Generator
+       |                    |
+       +--------------------+
+       |
+   SolidWorks COM API
+```
+
+The server registers tools over MCP's stdio transport. When a tool is called, it validates input with Zod, then calls SolidWorks through the [winax](https://github.com/niclasku/winax) COM bridge. An intelligent routing layer handles a key limitation of Node.js COM bridges: methods with 13+ parameters often fail via direct COM calls.
+
+- **Simple operations (12 params or fewer)** - Direct COM call via `winax`
+- **Complex operations (13+ params)** - Auto-generated VBA macro executed by SolidWorks
+- **Failed operations** - Automatic fallback with error context
+
+VBA generation tools produce macro code without needing a live SolidWorks connection. McMaster-Carr tools work over HTTP on any platform.
 
 ## Workflow Examples
 
@@ -94,22 +119,6 @@ Ensure all drawings in a project use the same title block, border, and format se
 2. `batch_apply_template` — apply to all child drawings in the project folder
 3. `compare_drawing_templates` — verify consistency and flag any deviations
 
-## How It Works
-
-```
-Claude / MCP Client
-       |
-   MCP Protocol (stdio JSON-RPC)
-       |
-   Tool Handlers (src/tools/*.ts)
-       |
-   SolidWorksAPI (src/solidworks/api.ts)  -- winax COM bridge
-       |
-   SolidWorks COM API
-```
-
-The server registers tools over MCP's stdio transport. When a tool is called, it validates input with Zod, then calls SolidWorks through the [winax](https://github.com/niclasku/winax) COM bridge. VBA generation tools produce macro code without needing a live SolidWorks connection. McMaster-Carr tools work over HTTP on any platform.
-
 ## Prerequisites
 
 - **Windows 10/11** (required for SolidWorks COM)
@@ -139,6 +148,8 @@ winget install Git.Git
 ```
 
 Close and reopen PowerShell after installing these so PATH updates take effect.
+
+> **Note:** The `winax` native module must be compiled locally on each Windows machine. Global npm installation does not work.
 
 ### 2. Install Node.js via Volta
 
@@ -186,7 +197,11 @@ Add to your `claude_desktop_config.json` (usually at `%APPDATA%\Claude\claude_de
   "mcpServers": {
     "solidworks": {
       "command": "node",
-      "args": ["C:/path/to/SolidworksMCP-TS/dist/index.js"]
+      "args": ["C:/path/to/SolidworksMCP-TS/dist/index.js"],
+      "env": {
+        "SOLIDWORKS_PATH": "C:\\Program Files\\SOLIDWORKS Corp\\SOLIDWORKS",
+        "ADAPTER_TYPE": "winax-enhanced"
+      }
     }
   }
 }
@@ -335,9 +350,10 @@ Search McMaster-Carr, get full part details (specs, pricing, delivery), download
 ```bash
 npm run build        # TypeScript compile
 npm run dev          # Hot-reload dev server (tsx watch)
-npm test             # Unit tests (vitest)
-npm run test:watch   # Watch mode
-npm run lint         # ESLint
+npm run check        # TypeScript + Biome lint in one command
+npm run lint         # Biome lint check
+npm run lint:fix     # Biome auto-fix
+npm run format       # Biome format
 npm run typecheck    # Type check without emit
 ```
 
@@ -350,6 +366,8 @@ npm test                                    # All tests (mocked, no network)
 MCMASTER_NETWORK_TESTS=true npm test        # Include McMaster live endpoint tests
 USE_MOCK_SOLIDWORKS=false npm test          # Integration tests (Windows + SolidWorks required)
 ```
+
+See [TESTING.md](TESTING.md) for the full testing guide.
 
 ### Project Structure
 
@@ -394,12 +412,36 @@ npm install --build-from-source
 - Check that SolidWorks COM is registered: `regsvr32 "C:\Program Files\SOLIDWORKS Corp\SOLIDWORKS\sldworks.tlb"`
 - Try running your terminal as Administrator
 
+### Build Issues
+```bash
+rm -rf node_modules dist
+npm install
+npm run build
+```
+
 ### Debug logging
 ```powershell
 $env:LOG_LEVEL="debug"
 node dist/index.js
 ```
 
+## Known Issues & Limitations
+
+- **No CI integration testing** - Tests only run against mocks. Real SolidWorks integration tests require a self-hosted Windows runner that doesn't exist yet.
+- **winax compilation** - Must be compiled locally on each machine. No pre-built binaries.
+- **Edge.js adapter** - Defined in architecture but not implemented.
+- **PowerShell bridge** - Defined in architecture but not implemented.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+Key areas where help is needed:
+
+- **Testing against real SolidWorks** - The biggest gap. If you have SolidWorks, running tools and reporting results is extremely valuable.
+- **COM interop edge cases** - Different SolidWorks versions behave differently.
+- **Additional tool implementations** - Many SolidWorks API methods aren't exposed yet.
+
 ## License
 
-MIT
+MIT - See [LICENSE](LICENSE)

@@ -1,73 +1,58 @@
-import { z } from 'zod';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Handlebars from 'handlebars';
-import { readFileSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { SolidWorksAPI } from '../solidworks/api.js';
+import { z } from 'zod';
+import type { SolidWorksAPI } from '../solidworks/api.js';
 import { autoExecuteField, withAutoExecute } from '../utils/vba-auto-execute.js';
-
-// Import all VBA generation modules
-import { partModelingVBATools } from './vba-part.js';
+import { advancedVBATools } from './vba-advanced.js';
 import { assemblyVBATools } from './vba-assembly.js';
 import { drawingVBATools } from './vba-drawing.js';
 import { fileManagementVBATools } from './vba-file-management.js';
-import { advancedVBATools } from './vba-advanced.js';
+// Import all VBA generation modules
+import { partModelingVBATools } from './vba-part.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Register Handlebars helpers - CRITICAL FIX
-Handlebars.registerHelper('eq', function(a: any, b: any) {
-  return a === b;
+Handlebars.registerHelper('eq', (a: any, b: any) => a === b);
+
+Handlebars.registerHelper('ne', (a: any, b: any) => a !== b);
+
+Handlebars.registerHelper('lt', (a: any, b: any) => a < b);
+
+Handlebars.registerHelper('gt', (a: any, b: any) => a > b);
+
+Handlebars.registerHelper('lte', (a: any, b: any) => a <= b);
+
+Handlebars.registerHelper('gte', (a: any, b: any) => a >= b);
+
+Handlebars.registerHelper('and', (...args: any[]) => {
+  return args.slice(0, -1).every(Boolean);
 });
 
-Handlebars.registerHelper('ne', function(a: any, b: any) {
-  return a !== b;
+Handlebars.registerHelper('or', (...args: any[]) => {
+  return args.slice(0, -1).some(Boolean);
 });
 
-Handlebars.registerHelper('lt', function(a: any, b: any) {
-  return a < b;
-});
-
-Handlebars.registerHelper('gt', function(a: any, b: any) {
-  return a > b;
-});
-
-Handlebars.registerHelper('lte', function(a: any, b: any) {
-  return a <= b;
-});
-
-Handlebars.registerHelper('gte', function(a: any, b: any) {
-  return a >= b;
-});
-
-Handlebars.registerHelper('and', function() {
-  return Array.prototype.slice.call(arguments, 0, -1).every(Boolean);
-});
-
-Handlebars.registerHelper('or', function() {
-  return Array.prototype.slice.call(arguments, 0, -1).some(Boolean);
-});
-
-Handlebars.registerHelper('not', function(a: any) {
-  return !a;
-});
+Handlebars.registerHelper('not', (a: any) => !a);
 
 // VBA template compiler with template name mapping
 const compileTemplate = (templateName: string): any => {
   // Map common names to actual file names
   const templateMap: Record<string, string> = {
-    'batch_export': 'batch_process', // Fix template name mismatch
-    'create_drawing': 'create_drawing',
-    'modify_dimensions': 'modify_dimensions'
+    batch_export: 'batch_process', // Fix template name mismatch
+    create_drawing: 'create_drawing',
+    modify_dimensions: 'modify_dimensions',
   };
-  
+
   const actualTemplateName = templateMap[templateName] || templateName;
   const templatePath = join(__dirname, '../../examples/vba-templates', `${actualTemplateName}.vba`);
-  
+
   try {
     const templateContent = readFileSync(templatePath, 'utf-8');
     return Handlebars.compile(templateContent);
-  } catch (error) {
+  } catch (_error) {
     // If template doesn't exist, try without mapping
     const directPath = join(__dirname, '../../examples/vba-templates', `${templateName}.vba`);
     const templateContent = readFileSync(directPath, 'utf-8');
@@ -85,24 +70,24 @@ const originalVBATools = [
       parameters: z.record(z.any()).describe('Parameters to pass to the template'),
       outputPath: z.string().optional().describe('Optional path to save the generated script'),
     }),
-    handler: async (args: any, swApi: SolidWorksAPI) => {
+    handler: async (args: any, _swApi: SolidWorksAPI) => {
       try {
         const template = compileTemplate(args.template);
         const vbaCode = template(args.parameters);
-        
+
         if (args.outputPath) {
-          const fs = await import('fs/promises');
+          const fs = await import('node:fs/promises');
           await fs.writeFile(args.outputPath, vbaCode, 'utf-8');
           return `VBA script generated and saved to: ${args.outputPath}`;
         }
-        
+
         return vbaCode;
       } catch (error) {
         return `Failed to generate VBA script: ${error}`;
       }
     },
   },
-  
+
   {
     name: 'create_feature_vba',
     description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to create features like bosses, cuts, fillets, chamfers, holes, and shells. For live feature creation, use create_extrusion instead. Requires Windows + SolidWorks to run the generated macro.',
@@ -116,7 +101,7 @@ const originalVBATools = [
       }),
       autoExecute: autoExecuteField
     }),
-    handler: withAutoExecute((args: any, swApi: SolidWorksAPI) => {
+    handler: withAutoExecute((args: any, _swApi: SolidWorksAPI) => {
       const vbaTemplates: Record<string, string> = {
         extrude: `
 Sub CreateExtrusion()
@@ -160,7 +145,7 @@ Sub CreateHole()
     End If
 End Sub`,
       };
-      
+
       return vbaTemplates[args.featureType] || 'Feature type not yet implemented';
     }),
   },
@@ -176,7 +161,7 @@ End Sub`,
       propertyValue: z.string().optional().describe('Property value for update operations'),
       autoExecute: autoExecuteField
     }),
-    handler: withAutoExecute((args: any, swApi: SolidWorksAPI) => {
+    handler: withAutoExecute((args: any, _swApi: SolidWorksAPI) => {
       try {
         const template = compileTemplate('batch_process');
         return template({
@@ -194,12 +179,11 @@ End Sub`,
 
   {
     name: 'run_vba_macro',
-    description: 'REQUIRES WINDOWS + SOLIDWORKS. Runs a VBA macro string directly in the active SolidWorks session via the COM API.',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Run an existing .swb or .swp macro file inside the SolidWorks process. Has full VBA type support (Dim x As Type, Set, Transform2, AddMate5, etc). Use this for operations that fail in execute_vbscript due to COM type limitations.',
     inputSchema: z.object({
       macroPath: z.string().describe('Full path to the macro file (.swp or .swb)'),
-      moduleName: z.string().default('Module1').describe('Module name containing the procedure'),
-      procedureName: z.string().describe('Procedure name to execute'),
-      arguments: z.array(z.any()).optional().describe('Arguments to pass to the macro'),
+      moduleName: z.string().default('').describe('Module name containing the procedure (empty string for default)'),
+      procedureName: z.string().describe('Procedure name to execute (e.g. "main")'),
     }),
     handler: (args: any, swApi: SolidWorksAPI) => {
       try {
@@ -207,15 +191,15 @@ End Sub`,
           args.macroPath,
           args.moduleName,
           args.procedureName,
-          args.arguments || []
+          []
         );
-        return `Macro executed successfully. Result: ${result}`;
+        return `Macro executed. Result: ${result}`;
       } catch (error) {
         return `Failed to execute macro: ${error}`;
       }
     },
   },
-  
+
   {
     name: 'create_drawing_vba',
     description: 'GENERATES VBA CODE ONLY (does not execute). Produce VBA to create a drawing document with standard views from a 3D model. For live drawing creation, use create_drawing_from_model + add_drawing_view instead. Requires Windows + SolidWorks to run the generated macro.',
@@ -226,7 +210,7 @@ End Sub`,
       sheet_size: z.enum(['A4', 'A3', 'A2', 'A1', 'A0', 'Letter', 'Tabloid']),
       autoExecute: autoExecuteField
     }),
-    handler: withAutoExecute((args: any, swApi: SolidWorksAPI) => {
+    handler: withAutoExecute((args: any, _swApi: SolidWorksAPI) => {
       try {
         const template = compileTemplate('create_drawing');
         return template({
@@ -249,5 +233,5 @@ export const vbaTools = [
   ...assemblyVBATools,
   ...drawingVBATools,
   ...fileManagementVBATools,
-  ...advancedVBATools
+  ...advancedVBATools,
 ];

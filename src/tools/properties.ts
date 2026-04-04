@@ -28,35 +28,23 @@ export const getCustomPropertiesTool = {
         };
       }
 
-      const nameArray: string[] = Array.isArray(names) ? names : [names];
+      const nameArray: string[] = (Array.isArray(names) ? names : [names]).map((n: any) => String(n));
       const properties: Array<{ name: string; value: string; evaluatedValue: string; type: number }> = [];
 
       for (const name of nameArray) {
-        const valOut = { value: '' };
-        const evalOut = { value: '' };
-        // Get6 returns: retval, name, useCached, valOut, resolvedValOut, wasResolved
         try {
-          propMgr.Get6(name, false, valOut, evalOut, undefined);
-          const propType = propMgr.GetType2(name);
+          const rawVal = propMgr.Get(name);
+          const value = String(rawVal ?? '');
+          let propType = 0;
+          try { propType = Number(propMgr.GetType2(name)); } catch { /* ignore */ }
           properties.push({
-            name,
-            value: valOut.value || '',
-            evaluatedValue: evalOut.value || '',
+            name: String(name),
+            value,
+            evaluatedValue: value,
             type: propType
           });
         } catch {
-          // Fallback: try Get4
-          try {
-            propMgr.Get4(name, false, valOut, evalOut);
-            properties.push({
-              name,
-              value: valOut.value || '',
-              evaluatedValue: evalOut.value || '',
-              type: 0
-            });
-          } catch {
-            properties.push({ name, value: '(read error)', evaluatedValue: '', type: 0 });
-          }
+          properties.push({ name: String(name), value: '(read error)', evaluatedValue: '', type: 0 });
         }
       }
 
@@ -118,14 +106,22 @@ export const setCustomPropertiesTool = {
 
 export const getFeatureTreeTool = {
     name: 'get_feature_tree',
-    description: 'REQUIRES WINDOWS + SOLIDWORKS. Walk the feature tree and return every feature with its type, name, suppression state, and child features. Useful for discovering dimension names before calling get_dimension or set_dimension.',
+    description: 'REQUIRES WINDOWS + SOLIDWORKS. Walk the feature tree and return every feature with its type, name, suppression state, dimensions, and child features. Useful for discovering dimension names before calling get_dimension or set_dimension, and for verifying that features were created correctly.',
     inputSchema: z.object({
       includeSuppressionState: z.boolean().default(true),
-      maxFeatures: z.number().default(500).describe('Maximum features to return')
+      includeDimensions: z.boolean().default(true).describe('Include dimension names and values for each feature'),
+      maxFeatures: z.number().default(500).describe('Maximum features to return'),
+      skipSystemFeatures: z.boolean().default(false).describe('Skip Origin, planes, axes, and system folders to reduce noise')
     }),
     handler: (args: any, swApi: SolidWorksAPI) => {
       const model = swApi.getCurrentModel();
       if (!model) throw new Error('No active document');
+
+      const SYSTEM_TYPES = new Set([
+        'OriginProfileFeature', 'RefPlane', 'RefAxis', 'ProfileFeature',
+        'MaterialFolder', 'HistoryFolder', 'SensorFolder', 'DocsFolder',
+        'DetailCabinet', 'FlatPatternFolder', 'CommentsFolder', 'FtrFolder'
+      ]);
 
       const featureCount = model.GetFeatureCount();
       const limit = Math.min(featureCount, args.maxFeatures);
@@ -134,6 +130,7 @@ export const getFeatureTreeTool = {
         name: string;
         typeName: string;
         suppressed?: boolean;
+        dimensions?: Array<{ fullName: string; value: number }>;
       }> = [];
 
       for (let i = 0; i < limit; i++) {
@@ -141,8 +138,16 @@ export const getFeatureTreeTool = {
           const feat = model.FeatureByPositionReverse(featureCount - 1 - i);
           if (!feat) continue;
 
-          const typeName = feat.GetTypeName2() || '';
-          const featName = feat.Name || feat.GetName?.() || `Feature_${i}`;
+          const typeName = String(feat.GetTypeName2() || '');
+
+          if (args.skipSystemFeatures && SYSTEM_TYPES.has(typeName)) continue;
+          // feat.Name is a COM method (function), not a property — must call it
+          let featName = `Feature_${i}`;
+          try {
+            if (typeof feat.Name === 'function') featName = String(feat.Name());
+            else if (typeof feat.GetNameForSelection === 'function') featName = String(feat.GetNameForSelection());
+            else featName = String(feat.Name || `Feature_${i}`);
+          } catch { /* fallback */ }
 
           const entry: any = {
             index: i,
@@ -152,15 +157,49 @@ export const getFeatureTreeTool = {
 
           if (args.includeSuppressionState) {
             try {
-              entry.suppressed = feat.IsSuppressed2(0, undefined)
-                ? true
-                : false;
+              // IsSuppressed (no params) works through winax; IsSuppressed2 has ByRef issues
+              entry.suppressed = !!feat.IsSuppressed();
             } catch {
               try {
-                entry.suppressed = !!feat.IsSuppressed();
+                entry.suppressed = feat.IsSuppressed2(0, undefined) ? true : false;
               } catch {
                 // Can't read suppression state
               }
+            }
+          }
+
+          // Extract dimensions for this feature
+          if (args.includeDimensions) {
+            const dims: Array<{ fullName: string; value: number }> = [];
+            try {
+              let dispDim = feat.GetFirstDisplayDimension();
+              let safety = 0;
+              while (dispDim && safety < 50) {
+                safety++;
+                try {
+                  const dimObj = dispDim.GetDimension2?.(0) || dispDim.GetDimension?.();
+                  if (dimObj) {
+                    // COM values need explicit coercion to serialize in JSON
+                    const fullName = String(dimObj.FullName || dimObj.Name || '');
+                    // SystemValue is in meters for length dims — convert to mm
+                    const sysVal = Number(dimObj.SystemValue);
+                    const valueMM = !isNaN(sysVal) ? Math.round(sysVal * 1000 * 1000) / 1000 : 0;
+                    dims.push({ fullName, value: valueMM });
+                  }
+                } catch {
+                  // Skip unreadable dimension
+                }
+                try {
+                  dispDim = feat.GetNextDisplayDimension(dispDim);
+                } catch {
+                  break;
+                }
+              }
+            } catch {
+              // Feature has no display dimensions
+            }
+            if (dims.length > 0) {
+              entry.dimensions = dims;
             }
           }
 

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SolidWorksAPI } from '../solidworks/api.js';
+import type { SolidWorksAPI } from '../solidworks/api.js';
 import { SolidWorksConfig } from '../utils/solidworks-config.js';
 
 export const drawingTools = [
@@ -15,8 +15,13 @@ export const drawingTools = [
         const app = swApi.getApp();
         const model = swApi.getCurrentModel();
         if (!model) throw new Error('No model open to create drawing from');
-        
-        // Get default drawing template if not specified
+
+        const modelPath = String(model.GetPathName() || '');
+        if (!modelPath) {
+          throw new Error('Model has no saved path - save the model first before creating a drawing');
+        }
+
+
         let templatePath = args.template;
         if (!templatePath || templatePath === '') {
           try {
@@ -25,78 +30,52 @@ export const drawingTools = [
             throw new Error(`Template path error: ${e}`);
           }
         }
-        
-        // Create new drawing - try different methods
-        let drawing = null;
-        
-        // Method 1: NewDocument
+
+        // NewDocument returns a COM object, but via winax the return may not
+        // be the ModelDoc2 pointer.  After creation, ActiveDoc is the new drawing.
         try {
-          drawing = app.NewDocument(templatePath, 0, 0, 0);
+          app.NewDocument(templatePath, 0, 0, 0);
         } catch (e) {
-          // Method 2: Try with different parameters
           try {
-            drawing = app.NewDocument(templatePath, 2, 0.297, 0.21); // A4 size
+            app.NewDocument(templatePath, 2, 0.297, 0.21);
           } catch (e2) {
-            // Method 3: Try creating from active model
-            try {
-              const modelPath = model.GetPathName();
-              if (modelPath) {
-                drawing = app.NewDrawing2(
-                  0, // Use default template
-                  templatePath,
-                  2, // Paper size (2 = A4)
-                  0.297, // Width
-                  0.21, // Height
-                  modelPath,
-                  modelPath
-                );
-              }
-            } catch (e3) {
-              throw new Error(`Cannot create drawing with template: ${templatePath}`);
-            }
+            throw new Error(`Cannot create drawing with template: ${templatePath} — ${e2}`);
           }
         }
-        
-        if (!drawing) {
-          throw new Error('Failed to create drawing document');
+
+        // Get the drawing doc from ActiveDoc (reliable via winax)
+        const drawDoc = app.ActiveDoc;
+        if (!drawDoc || drawDoc.GetType() !== 3) {
+          throw new Error('Failed to create drawing document — ActiveDoc is not a drawing');
         }
-        
-        // Try to add a view of the model
+
+
         const warnings: string[] = [];
         try {
-          const drawDoc = drawing;
-          const modelPath = model.GetPathName();
+          const firstView = drawDoc.CreateDrawViewFromModelView3(
+            modelPath,
+            '*Front',
+            0.15,
+            0.15,
+            0
+          );
 
-          if (modelPath && modelPath !== '') {
-            // Create first view
-            const firstView = drawDoc.CreateDrawViewFromModelView3(
-              modelPath,
-              '*Front', // Standard view name
-              0.15, // X position
-              0.15, // Y position
-              0  // Use sheet scale
-            );
+          if (firstView) {
+            try {
+              const topView = drawDoc.CreateUnfoldedViewAt3(0.25, 0.15, 0, false);
+              if (!topView) warnings.push('Failed to create top view');
+            } catch (e) {
+              warnings.push(`Top view error: ${e}`);
+            }
 
-            if (firstView) {
-              // Add projected views
-              try {
-                const topView = drawDoc.CreateUnfoldedViewAt3(0.25, 0.15, 0, false);
-                if (!topView) warnings.push('Failed to create top view');
-              } catch (e) {
-                warnings.push(`Top view error: ${e}`);
-              }
-
-              try {
-                const rightView = drawDoc.CreateUnfoldedViewAt3(0.15, 0.25, 0, false);
-                if (!rightView) warnings.push('Failed to create right view');
-              } catch (e) {
-                warnings.push(`Right view error: ${e}`);
-              }
-            } else {
-              warnings.push('Failed to create front view - drawing is empty');
+            try {
+              const rightView = drawDoc.CreateUnfoldedViewAt3(0.15, 0.25, 0, false);
+              if (!rightView) warnings.push('Failed to create right view');
+            } catch (e) {
+              warnings.push(`Right view error: ${e}`);
             }
           } else {
-            warnings.push('Model has no saved path - cannot create views. Save the model first.');
+            warnings.push('Failed to create front view - drawing is empty');
           }
         } catch (e) {
           warnings.push(`View creation error: ${e}`);
@@ -109,7 +88,7 @@ export const drawingTools = [
       }
     },
   },
-  
+
   {
     name: 'add_drawing_view',
     description: 'REQUIRES WINDOWS + SOLIDWORKS. Insert a standard, projected, or isometric view into the active drawing. A drawing must be open (use create_drawing_from_model first).',
@@ -123,12 +102,13 @@ export const drawingTools = [
     handler: (args: any, swApi: SolidWorksAPI) => {
       try {
         const model = swApi.getCurrentModel();
-        if (!model || model.GetType() !== 3) { // swDocDRAWING
+        if (!model || model.GetType() !== 3) {
+          // swDocDRAWING
           throw new Error('Current document must be a drawing');
         }
-        
+
         const drawingDoc = model;
-        
+
         // View orientation map
         const orientationMap: Record<string, string> = {
           front: '*Front',
@@ -140,7 +120,7 @@ export const drawingTools = [
           iso: '*Isometric',
           current: '*Current',
         };
-        
+
         const view = drawingDoc.CreateDrawViewFromModelView3(
           args.modelPath,
           orientationMap[args.viewType],
@@ -148,21 +128,21 @@ export const drawingTools = [
           args.y / 1000,
           0
         );
-        
+
         if (!view) throw new Error('Failed to create view');
-        
+
         // Set scale if specified
         if (args.scale) {
           view.ScaleDecimal = args.scale;
         }
-        
+
         return `Added ${args.viewType} view at (${args.x}, ${args.y})`;
       } catch (error) {
         return `Failed to add drawing view: ${error}`;
       }
     },
   },
-  
+
   {
     name: 'add_section_view',
     description: 'REQUIRES WINDOWS + SOLIDWORKS. Insert a section view cut along a line in an existing view. A drawing with at least one view must be open.',
@@ -170,20 +150,22 @@ export const drawingTools = [
       parentView: z.string().describe('Name of the parent view'),
       x: z.number().describe('X position on sheet (mm)'),
       y: z.number().describe('Y position on sheet (mm)'),
-      sectionLine: z.object({
-        x1: z.number(),
-        y1: z.number(),
-        x2: z.number(),
-        y2: z.number(),
-      }).describe('Section line coordinates relative to parent view'),
+      sectionLine: z
+        .object({
+          x1: z.number(),
+          y1: z.number(),
+          x2: z.number(),
+          y2: z.number(),
+        })
+        .describe('Section line coordinates relative to parent view'),
     }),
-    handler: (args: any, swApi: SolidWorksAPI) => {
+    handler: (_args: any, swApi: SolidWorksAPI) => {
       try {
         const model = swApi.getCurrentModel();
         if (!model || model.GetType() !== 3) {
           throw new Error('Current document must be a drawing');
         }
-        
+
         // Implementation would require selecting parent view and creating section line
         // This is a simplified response
         return `Section view creation requires interactive selection. Use VBA generation for automated section views.`;
@@ -192,7 +174,7 @@ export const drawingTools = [
       }
     },
   },
-  
+
   {
     name: 'add_dimensions',
     description: 'REQUIRES WINDOWS + SOLIDWORKS. Add reference dimensions to a drawing view. Different from add_sketch_dimension which dimensions sketch entities in a 3D model.',
@@ -206,15 +188,15 @@ export const drawingTools = [
         if (!model || model.GetType() !== 3) {
           throw new Error('Current document must be a drawing');
         }
-        
+
         const drawingDoc = model;
         const view = drawingDoc.FeatureByName(args.viewName);
-        
+
         if (!view) throw new Error(`View "${args.viewName}" not found`);
-        
+
         // Select the view
         view.Select2(false, 0);
-        
+
         // Auto-dimension
         drawingDoc.Extension.AutoDimension(
           1, // Scheme: Baseline
@@ -223,14 +205,14 @@ export const drawingTools = [
           1, // Placement: Above view
           0 // Offset
         );
-        
+
         return `Added dimensions to view: ${args.viewName}`;
       } catch (error) {
         return `Failed to add dimensions: ${error}`;
       }
     },
   },
-  
+
   {
     name: 'update_sheet_format',
     description: 'REQUIRES WINDOWS + SOLIDWORKS. Update the title block, border, or custom properties on the active drawing sheet.',
@@ -251,10 +233,10 @@ export const drawingTools = [
         if (!model || model.GetType() !== 3) {
           throw new Error('Current document must be a drawing');
         }
-        
+
         // Update custom properties
         const customPropMgr = model.Extension.CustomPropertyManager('');
-        
+
         for (const [key, value] of Object.entries(args.properties)) {
           if (value) {
             customPropMgr.Add3(
@@ -265,10 +247,10 @@ export const drawingTools = [
             );
           }
         }
-        
+
         // Force update of sheet format
         model.ForceRebuild3(false);
-        
+
         return `Updated sheet format properties`;
       } catch (error) {
         return `Failed to update sheet format: ${error}`;

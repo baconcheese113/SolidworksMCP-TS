@@ -6,60 +6,64 @@
  * design tables, SQL integration, VBA generation, and PDM configuration
  */
 
+import { createRequire } from 'node:module';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { 
-  CallToolRequestSchema, 
-  ListToolsRequestSchema,
-  ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
+import {
+  CallToolRequestSchema,
   ErrorCode,
-  McpError
+  ListResourcesRequestSchema,
+  ListToolsRequestSchema,
+  McpError,
+  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import dotenv from 'dotenv';
+import { z } from 'zod';
+import { zodToJsonSchema as _zodToJsonSchema } from 'zod-to-json-schema';
 
-import { createRequire } from 'module';
+// Wrapper to avoid TS2589 "excessively deep" error from zod-to-json-schema generics with zod 3.25+
+const zodToJsonSchema = (schema: unknown) => _zodToJsonSchema(schema as Parameters<typeof _zodToJsonSchema>[0]);
+
 const require = createRequire(import.meta.url);
 const packageJson = require('../package.json');
 
-// Import logging
-import { logInfo, logError, logOperation } from './utils/logger.js';
-
-// Import resources and registry
-import { resourceRegistry } from './resources/registry.js';
-import { DesignTableResource } from './resources/design-table.js';
-import { PDMResource } from './resources/pdm.js';
-
-// Import state management
-import { ResourceStateStore } from './state/store.js';
-
-// Import macro system
-import { MacroRecorder } from './macro/index.js';
-
 // Import cache management
 import { CacheManager } from './cache/manager.js';
-
 // Import database management
 import { dbManager } from './db/connection.js';
-
-// Import existing tools
-import { modelingTools } from './tools/modeling.js';
-import { drawingTools } from './tools/drawing.js';
-import { exportTools } from './tools/export.js';
-import { vbaTools } from './tools/vba.js';
-import { analysisTools } from './tools/analysis.js';
-import { sketchTools } from './tools/sketch.js';
-import { templateManagerTools } from './tools/template-manager.js';
-import { nativeMacroTools } from './tools/native-macro.js';
-import { mcmasterTools } from './tools/mcmaster.js';
-import { propertyTools } from './tools/properties.js';
-import { assemblyInterrogationTools } from './tools/assembly-interrogation.js';
-import { engineeringCalcTools } from './tools/engineering-calc.js';
+// Import macro system
+import { MacroRecorder } from './macro/index.js';
+import { DesignTableResource } from './resources/design-table.js';
+import { PDMResource } from './resources/pdm.js';
+// Import resources and registry
+import { resourceRegistry } from './resources/registry.js';
 
 // Import API
 import { SolidWorksAPI } from './solidworks/api.js';
+// Import state management
+import { ResourceStateStore } from './state/store.js';
+import { analysisTools } from './tools/analysis.js';
+import { assemblyInterrogationTools } from './tools/assembly-interrogation.js';
+import { assemblyTools } from './tools/assembly.js';
+import { drawingTools } from './tools/drawing.js';
+import { engineeringCalcTools } from './tools/engineering-calc.js';
+import { exportTools } from './tools/export.js';
+import { inspectionTools } from './tools/inspection.js';
+import { mcmasterTools } from './tools/mcmaster.js';
+// Import existing tools
+import { modelingTools } from './tools/modeling.js';
+import { nativeMacroTools } from './tools/native-macro.js';
+import { pdmTools } from './tools/pdm.js';
+import { propertyTools } from './tools/properties.js';
+import { sceneInspectionTools } from './tools/scene-inspection.js';
+import { sketchTools } from './tools/sketch.js';
+import { templateManagerTools } from './tools/template-manager.js';
+import { vbaTools } from './tools/vba.js';
+import { workflowCleanupTools } from './tools/workflow-cleanup.js';
+import { workflowDrawingTools } from './tools/workflow-drawing.js';
+// Import logging
+import { logError, logInfo, logOperation } from './utils/logger.js';
+import { executeRawVBScript } from './utils/vba-executor.js';
 
 dotenv.config();
 
@@ -71,7 +75,7 @@ const ConfigSchema = z.object({
   pdmVault: z.string().optional(),
   sqlConnection: z.string().optional(),
   stateFile: z.string().optional(),
-  logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info')
+  logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 });
 
 class SolidWorksMCPServer {
@@ -91,7 +95,7 @@ class SolidWorksMCPServer {
       pdmVault: process.env.PDM_VAULT,
       sqlConnection: process.env.SQL_CONNECTION,
       stateFile: process.env.STATE_FILE,
-      logLevel: process.env.LOG_LEVEL || 'info'
+      logLevel: process.env.LOG_LEVEL || 'info',
     });
 
     // Initialize components
@@ -105,13 +109,14 @@ class SolidWorksMCPServer {
       {
         name: 'solidworks-mcp-server',
         version: packageJson.version,
-        description: 'Enhanced SolidWorks MCP Server with macro recording, design tables, SQL integration, and PDM support'
+        description:
+          'Enhanced SolidWorks MCP Server with macro recording, design tables, SQL integration, and PDM support',
       },
       {
         capabilities: {
           tools: {},
-          resources: {}
-        }
+          resources: {},
+        },
       }
     );
 
@@ -137,15 +142,15 @@ class SolidWorksMCPServer {
           parameters: [
             { name: 'Length', type: 'dimension', dataType: 'number', sqlColumn: 'length' },
             { name: 'Width', type: 'dimension', dataType: 'number', sqlColumn: 'width' },
-            { name: 'Height', type: 'dimension', dataType: 'number', sqlColumn: 'height' }
+            { name: 'Height', type: 'dimension', dataType: 'number', sqlColumn: 'height' },
           ],
           dataSource: {
             type: 'sql',
             connectionString: 'mssql://server:1433/database',
-            query: 'SELECT * FROM design_configurations'
-          }
-        }
-      ]
+            query: 'SELECT * FROM design_configurations',
+          },
+        },
+      ],
     });
 
     // Register PDM resource
@@ -161,15 +166,15 @@ class SolidWorksMCPServer {
             vaultName: 'Engineering',
             operations: {
               checkIn: { enabled: true, comment: 'Auto check-in' },
-              checkOut: { enabled: true, getLatestVersion: true }
-            }
-          }
-        ]
+              checkOut: { enabled: true, getLatestVersion: true },
+            },
+          },
+        ],
       });
     }
 
-    logInfo('Resources registered', { 
-      types: resourceRegistry.getAllTypes() 
+    logInfo('Resources registered', {
+      types: resourceRegistry.getAllTypes(),
     });
   }
 
@@ -178,6 +183,38 @@ class SolidWorksMCPServer {
    */
   private setupHandlers(): void {
     // Combine all tools including enhanced refactored versions
+    // Pass-through tools for rapid iteration
+    const debugComCall = {
+      name: 'debug_com_call',
+      description: 'DEV ONLY. Execute arbitrary JavaScript code against the live SolidWorks COM connection. The code has access to `swApp` (ISldWorks) and `swModel` (active ModelDoc2). Return value is JSON-stringified.',
+      inputSchema: z.object({
+        code: z.string().describe('JavaScript code to evaluate. Has swApp and swModel in scope.'),
+      }),
+      handler: (args: any, swApi: SolidWorksAPI) => {
+        try {
+          const swApp = swApi.getApp();
+          const swModel = swApi.getCurrentModel();
+          // eslint-disable-next-line no-eval
+          const result = eval(args.code);
+          return JSON.stringify({ success: true, result: String(result) }, null, 2);
+        } catch (e: any) {
+          return JSON.stringify({ success: false, error: e?.message || String(e) }, null, 2);
+        }
+      },
+    };
+
+    const executeVbsTool = {
+      name: 'execute_vbscript',
+      description: 'Execute VBScript code in the running SolidWorks instance via cscript.exe. The script auto-connects to SolidWorks via GetObject. Use WScript.Echo for output. No VBA type declarations needed (Dim x, not Dim x As Type).',
+      inputSchema: z.object({
+        code: z.string().describe('VBScript code. swApp is pre-connected via GetObject(, "SldWorks.Application"). Use WScript.Echo for output.'),
+      }),
+      handler: (args: any) => {
+        const result = executeRawVBScript(args.code, 60000);
+        return JSON.stringify(result, null, 2);
+      },
+    };
+
     const allTools = [
       ...modelingTools,
       ...drawingTools,
@@ -190,19 +227,27 @@ class SolidWorksMCPServer {
       ...mcmasterTools,
       ...propertyTools,
       ...assemblyInterrogationTools,
+      ...assemblyTools,
       ...engineeringCalcTools,
+      ...inspectionTools,
+      ...workflowCleanupTools,
+      ...workflowDrawingTools,
+      ...pdmTools,
+      ...sceneInspectionTools,
+      debugComCall,
+      executeVbsTool,
       // Add macro tools
       {
         name: 'macro_start_recording',
         description: 'Start recording a new macro',
         inputSchema: z.object({
           name: z.string(),
-          description: z.string().optional()
+          description: z.string().optional(),
         }),
         handler: (args: any) => {
           const id = this.macroRecorder.startRecording(args.name, args.description);
           return { macroId: id, status: 'recording' };
-        }
+        },
       },
       {
         name: 'macro_stop_recording',
@@ -211,18 +256,18 @@ class SolidWorksMCPServer {
         handler: () => {
           const recording = this.macroRecorder.stopRecording();
           return recording || { error: 'No recording in progress' };
-        }
+        },
       },
       {
         name: 'macro_export_vba',
         description: 'Export a recorded macro to VBA code',
         inputSchema: z.object({
-          macroId: z.string()
+          macroId: z.string(),
         }),
         handler: (args: any) => {
           const vbaCode = this.macroRecorder.exportToVBA(args.macroId);
           return { code: vbaCode };
-        }
+        },
       },
       // Add design table tools
       {
@@ -230,24 +275,20 @@ class SolidWorksMCPServer {
         description: 'Create a new design table with optional SQL data source',
         inputSchema: z.object({
           name: z.string(),
-          config: z.any()
+          config: z.any(),
         }),
         handler: async (args: any) => {
-          const resource = new DesignTableResource(
-            `dt_${Date.now()}`,
-            args.name,
-            args.config
-          );
+          const resource = new DesignTableResource(`dt_${Date.now()}`, args.name, args.config);
           const result = await resource.execute(this.api);
           await this.stateStore.setState(resource.id, resource.toState());
           return result;
-        }
+        },
       },
       {
         name: 'design_table_refresh',
         description: 'Refresh design table data from SQL source',
         inputSchema: z.object({
-          resourceId: z.string()
+          resourceId: z.string(),
         }),
         handler: async (args: any) => {
           const state = this.stateStore.getState(args.resourceId);
@@ -258,60 +299,55 @@ class SolidWorksMCPServer {
           await resource.refresh(this.api);
           await this.stateStore.setState(resource.id, resource.toState());
           return { status: 'refreshed' };
-        }
+        },
       },
       // Add PDM tools if enabled
-      ...(this.config.enablePDM ? [
-        {
-          name: 'pdm_configure',
-          description: 'Configure PDM vault settings and operations',
-          inputSchema: z.object({
-            name: z.string(),
-            config: z.any()
-          }),
-          handler: async (args: any) => {
-            const resource = new PDMResource(
-              `pdm_${Date.now()}`,
-              args.name,
-              args.config
-            );
-            const result = await resource.execute(this.api);
-            await this.stateStore.setState(resource.id, resource.toState());
-            return result;
-          }
-        }
-      ] : [])
+      ...(this.config.enablePDM
+        ? [
+            {
+              name: 'pdm_configure',
+              description: 'Configure PDM vault settings and operations',
+              inputSchema: z.object({
+                name: z.string(),
+                config: z.any(),
+              }),
+              handler: async (args: any) => {
+                const resource = new PDMResource(`pdm_${Date.now()}`, args.name, args.config);
+                const result = await resource.execute(this.api);
+                await this.stateStore.setState(resource.id, resource.toState());
+                return result;
+              },
+            },
+          ]
+        : []),
     ];
 
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, () => {
       return {
-        tools: allTools.map(tool => ({
+        tools: allTools.map((tool) => ({
           name: tool.name,
           description: tool.description,
-          inputSchema: zodToJsonSchema(tool.inputSchema)
-        }))
+          inputSchema: zodToJsonSchema(tool.inputSchema),
+        })),
       };
     });
 
     // Handle tool execution
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
-      
+
       logOperation(name, 'started', args);
-      
-      const tool = allTools.find(t => t.name === name);
+
+      const tool = allTools.find((t) => t.name === name);
       if (!tool) {
-        throw new McpError(
-          ErrorCode.MethodNotFound,
-          `Tool "${name}" not found`
-        );
+        throw new McpError(ErrorCode.MethodNotFound, `Tool "${name}" not found`);
       }
 
       try {
         // Validate input
         const validatedArgs = tool.inputSchema.parse(args);
-        
+
         // Record action if recording
         if (this.config.enableMacroRecording && this.macroRecorder) {
           try {
@@ -320,7 +356,8 @@ class SolidWorksMCPServer {
             // Recording not in progress, ignore
           }
         }
-        
+
+
         // Ensure SolidWorks connection (skip for tools that don't need it)
         const noSwRequired = name.startsWith('mcmaster_') || name.startsWith('vba_') || name.startsWith('macro_start') || name.startsWith('macro_stop') || name.startsWith('macro_export') || name === 'tolerance_stack_analysis' || name === 'fit_analysis' || name === 'create_feature_vba' || name === 'create_batch_vba' || name === 'create_drawing_vba' || name === 'generate_vba_script';
         if (!noSwRequired && !this.api.isConnected()) {
@@ -329,24 +366,24 @@ class SolidWorksMCPServer {
 
         // Execute tool
         const result = await tool.handler(validatedArgs, this.api);
-        
+
         logOperation(name, 'completed', { result });
-        
+
         return {
           content: [
             {
               type: 'text',
-              text: typeof result === 'string' ? result : JSON.stringify(result, null, 2)
-            }
-          ]
+              text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+            },
+          ],
         };
       } catch (error) {
         logOperation(name, 'failed', { error });
-        
+
         if (error instanceof z.ZodError) {
           throw new McpError(
             ErrorCode.InvalidParams,
-            `Invalid parameters: ${error.errors.map(e => e.message).join(', ')}`
+            `Invalid parameters: ${error.errors.map((e) => e.message).join(', ')}`
           );
         }
         throw error;
@@ -356,42 +393,42 @@ class SolidWorksMCPServer {
     // List resources
     this.server.setRequestHandler(ListResourcesRequestSchema, () => {
       const resources = this.stateStore.getAllStates();
-      
+
       return {
-        resources: resources.map(state => ({
+        resources: resources.map((state) => ({
           uri: `solidworks://${state.type}/${state.id}`,
           name: state.name,
           mimeType: 'application/json',
-          description: `${state.type} resource: ${state.name}`
-        }))
+          description: `${state.type} resource: ${state.name}`,
+        })),
       };
     });
 
     // Read resource
     this.server.setRequestHandler(ReadResourceRequestSchema, (request) => {
       const { uri } = request.params;
-      
+
       // Parse URI: solidworks://type/id
       const match = uri.match(/^solidworks:\/\/([^/]+)\/(.+)$/);
       if (!match) {
         throw new McpError(ErrorCode.InvalidRequest, 'Invalid resource URI');
       }
-      
+
       const [, , id] = match;
       const state = this.stateStore.getState(id);
-      
+
       if (!state) {
         throw new McpError(ErrorCode.InvalidRequest, 'Resource not found');
       }
-      
+
       return {
         contents: [
           {
             uri,
             mimeType: 'application/json',
-            text: JSON.stringify(state, null, 2)
-          }
-        ]
+            text: JSON.stringify(state, null, 2),
+          },
+        ],
       };
     });
   }
@@ -428,14 +465,14 @@ class SolidWorksMCPServer {
       // Start server with stdio transport
       const transport = new StdioServerTransport();
       await this.server.connect(transport);
-      
+
       logInfo('SolidWorks MCP Server started', {
         version: packageJson.version,
         features: {
           macroRecording: this.config.enableMacroRecording,
           pdmIntegration: this.config.enablePDM,
-          sqlIntegration: !!this.config.sqlConnection
-        }
+          sqlIntegration: !!this.config.sqlConnection,
+        },
       });
 
       // Handle shutdown
@@ -444,7 +481,6 @@ class SolidWorksMCPServer {
         await this.shutdown();
         process.exit(0);
       });
-
     } catch (error) {
       logError('Failed to start server', error);
       throw error;
@@ -456,27 +492,27 @@ class SolidWorksMCPServer {
    */
   async shutdown(): Promise<void> {
     logInfo('Starting server shutdown...');
-    
+
     // Save state
     await this.stateStore.save();
-    
+
     // Stop auto-save
     this.stateStore.stopAutoSave();
-    
+
     // Clear cache
     this.cacheManager.clear();
-    
+
     // Close all database connections
     await dbManager.closeAll();
-    
+
     // Clear macro recorder
     this.macroRecorder.clear();
-    
+
     // Disconnect from SolidWorks
     if (this.api.isConnected()) {
       await this.api.disconnect();
     }
-    
+
     logInfo('Server shutdown complete');
   }
 }
